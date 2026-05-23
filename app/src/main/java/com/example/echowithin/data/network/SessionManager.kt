@@ -9,6 +9,8 @@ object SessionManager {
     private const val KEY_USERNAME = "username"
     private const val KEY_SYNC_MODE = "sync_mode"
     private const val KEY_ACCOUNT_TIER = "account_tier"
+    private const val KEY_IS_TRIAL = "is_trial"
+    private const val KEY_TRIAL_DAYS_REMAINING = "trial_days_remaining"
 
     private var prefs: SharedPreferences? = null
 
@@ -38,6 +40,18 @@ object SessionManager {
         get() = prefs?.getString(KEY_ACCOUNT_TIER, "free") ?: "free"
         set(value) {
             prefs?.edit()?.putString(KEY_ACCOUNT_TIER, value)?.apply()
+        }
+
+    var isTrial: Boolean
+        get() = prefs?.getBoolean(KEY_IS_TRIAL, false) ?: false
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_IS_TRIAL, value)?.apply()
+        }
+
+    var trialDaysRemaining: Int
+        get() = prefs?.getInt(KEY_TRIAL_DAYS_REMAINING, 0) ?: 0
+        set(value) {
+            prefs?.edit()?.putInt(KEY_TRIAL_DAYS_REMAINING, value)?.apply()
         }
 
 

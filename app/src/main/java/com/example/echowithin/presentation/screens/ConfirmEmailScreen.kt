@@ -24,7 +24,8 @@ import com.example.echowithin.ui.theme.BrandAmber
 fun ConfirmEmailScreen(
     email: String,
     viewModel: AuthViewModel,
-    onConfirmSuccess: () -> Unit
+    onConfirmSuccess: () -> Unit,
+    onBackToLogin: () -> Unit
 ) {
     var code by remember { mutableStateOf("") }
     val state = viewModel.confirmState
@@ -133,6 +134,17 @@ fun ConfirmEmailScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextButton(onClick = onBackToLogin) {
+                    Text(
+                        text = "Back to Login",
+                        color = BrandAmber,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
                 }
             }
         }

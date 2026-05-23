@@ -48,6 +48,7 @@ fun NoteDetailScreen(
     onToggleLock: ((Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     var noteState by remember { mutableStateOf(initialNote) }
     var isLoading by remember { mutableStateOf(initialNote == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -234,8 +235,12 @@ fun NoteDetailScreen(
                         Icon(Icons.Default.History, contentDescription = "Versions", tint = BrandAmber)
                     }
                     IconButton(onClick = {
-                        onToggleLock { newLocked ->
-                            noteState = noteState?.copy(isLocked = newLocked)
+                        if (com.example.echowithin.data.network.SessionManager.accountTier == "free") {
+                            android.widget.Toast.makeText(context, "Upgrade to Premium to lock notes!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            onToggleLock { newLocked ->
+                                noteState = noteState?.copy(isLocked = newLocked)
+                            }
                         }
                     }) {
                         Icon(

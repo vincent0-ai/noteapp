@@ -78,7 +78,9 @@ data class ProfileResponse(
     val email: String,
     val account_tier: String,
     val premium_until: String? = null,
-    val has_pin: Boolean = false
+    val has_pin: Boolean = false,
+    val is_trial: Boolean = false,
+    val trial_days_remaining: Int = 0
 )
 
 

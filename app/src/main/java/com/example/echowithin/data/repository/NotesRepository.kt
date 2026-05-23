@@ -21,7 +21,7 @@ class NotesRepository {
             val localNotes = dbHelper.getAllNotes()
             
             // 2. If Automatic Sync is active, trigger sync in the background
-            if (SessionManager.syncMode == "automatic") {
+            if (SessionManager.syncMode == "automatic" && SessionManager.accountTier != "free") {
                 try {
                     syncNotesInternal()
                 } catch (e: Exception) {
@@ -36,7 +36,9 @@ class NotesRepository {
 
     suspend fun syncNotes(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            syncNotesInternal()
+            if (SessionManager.accountTier != "free") {
+                syncNotesInternal()
+            }
         }
     }
 
@@ -128,6 +130,21 @@ class NotesRepository {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
+            val isFree = SessionManager.accountTier == "free"
+            if (isFree) {
+                val currentCount = dbHelper.getAllNotes().size
+                if (currentCount >= 50) {
+                    throw Exception("Free plan limit reached: You can create up to 50 notes. Upgrade to Premium for unlimited notes.")
+                }
+            }
+            
+            val limit = if (isFree) 20000 else 100000
+            if (content.length > limit) {
+                val planName = if (isFree) "Free" else "Premium"
+                throw Exception("$planName plan limit reached: Notes cannot exceed ${limit / 1000}k characters.")
+            }
+            
+            val pendingOp = if (isFree) "none" else "create"
             val note = AppNote(
                 id = tempId,
                 title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
@@ -138,12 +155,12 @@ class NotesRepository {
                 isLocked = false,
                 isPinned = false,
                 isSynced = false,
-                pendingOp = "create"
+                pendingOp = pendingOp
             )
             
-            dbHelper.saveNote(note, isSynced = false, pendingOp = "create")
+            dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)
 
-            if (SessionManager.syncMode == "automatic") {
+            if (SessionManager.syncMode == "automatic" && !isFree) {
                 try {
                     syncNotesInternal()
                     // Try to get updated note ID
@@ -163,8 +180,15 @@ class NotesRepository {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
+            val isFree = SessionManager.accountTier == "free"
+            val limit = if (isFree) 20000 else 100000
+            if (content.length > limit) {
+                val planName = if (isFree) "Free" else "Premium"
+                throw Exception("$planName plan limit reached: Notes cannot exceed ${limit / 1000}k characters.")
+            }
+            
             val existing = dbHelper.getNoteById(noteId)
-            val pendingOp = if (existing?.pendingOp == "create") "create" else "edit"
+            val pendingOp = if (isFree) "none" else (if (existing?.pendingOp == "create") "create" else "edit")
             
             val note = AppNote(
                 id = noteId,
@@ -181,7 +205,7 @@ class NotesRepository {
             
             dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)
 
-            if (SessionManager.syncMode == "automatic") {
+            if (SessionManager.syncMode == "automatic" && !isFree) {
                 try {
                     syncNotesInternal()
                 } catch (e: Exception) {
@@ -194,12 +218,17 @@ class NotesRepository {
 
     suspend fun deleteNote(noteId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            dbHelper.markDeleted(noteId)
-            if (SessionManager.syncMode == "automatic") {
-                try {
-                    syncNotesInternal()
-                } catch (e: Exception) {
-                    e.printStackTrace()
+            val isFree = SessionManager.accountTier == "free"
+            if (isFree) {
+                dbHelper.deletePhysically(noteId)
+            } else {
+                dbHelper.markDeleted(noteId)
+                if (SessionManager.syncMode == "automatic") {
+                    try {
+                        syncNotesInternal()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
             }
         }

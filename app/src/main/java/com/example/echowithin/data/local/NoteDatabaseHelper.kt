@@ -220,6 +220,6 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     fun clearAll() {
         val db = writableDatabase
-        db.delete(TABLE_NOTES, null, null)
+        db.delete(TABLE_NOTES, "$COLUMN_IS_SYNCED = ?", arrayOf("1"))
     }
 }

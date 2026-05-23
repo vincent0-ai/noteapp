@@ -178,6 +178,11 @@ fun AppNavGraph(
                     navController.navigate(AppRoute.Login) {
                         popUpTo(AppRoute.Register) { inclusive = true }
                     }
+                },
+                onBackToLogin = {
+                    navController.navigate(AppRoute.Login) {
+                        popUpTo(AppRoute.Welcome) { inclusive = true }
+                    }
                 }
             )
         }

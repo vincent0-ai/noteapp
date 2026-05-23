@@ -12,6 +12,7 @@ import com.example.echowithin.data.model.RegisterRequest
 import com.example.echowithin.data.network.ApiClient
 import com.example.echowithin.data.network.SessionManager
 import kotlinx.coroutines.launch
+import android.util.Log
 
 sealed class AuthUiState {
     object Idle : AuthUiState()
@@ -41,6 +42,14 @@ class AuthViewModel(
                     if (response.success) {
                         SessionManager.token = response.x_app_token
                         SessionManager.username = response.username
+                        try {
+                            val profile = ApiClient.apiService.getProfile()
+                            SessionManager.accountTier = profile.account_tier
+                            SessionManager.isTrial = profile.is_trial
+                            SessionManager.trialDaysRemaining = profile.trial_days_remaining
+                        } catch (e: Exception) {
+                            Log.e("AuthViewModel", "Failed to fetch profile on login", e)
+                        }
                         loginState = AuthUiState.Success
                         ApiClient.registerFcmToken(com.example.echowithin.EchoWithinApplication.instance)
                     } else {

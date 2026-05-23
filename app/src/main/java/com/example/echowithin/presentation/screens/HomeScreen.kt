@@ -997,13 +997,14 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
                     modifier = Modifier.weight(1f)
                 )
                 if (!note.isSynced) {
+                    val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = BrandAmber.copy(alpha = 0.15f),
                         modifier = Modifier.padding(start = 8.dp)
                     ) {
                         Text(
-                            text = "Pending",
+                            text = badgeText,
                             style = MaterialTheme.typography.labelSmall,
                             color = BrandAmber,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)

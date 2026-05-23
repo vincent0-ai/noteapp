@@ -49,6 +49,10 @@ fun PremiumScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.refreshPremiumStatus()
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -70,10 +74,8 @@ fun PremiumScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
-            if (uiState.isPremium) {
-                // ── Premium Active State ──
-
-                // Green checkmark badge
+            if (uiState.isPremium && !uiState.isTrial) {
+                // ── Fully Premium Active State ──
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = SuccessGreen.copy(alpha = 0.1f),
@@ -99,44 +101,47 @@ fun PremiumScreen(
                 )
 
                 Text(
-                    text = "You have full access to all premium features",
+                    text = "You have full access to all premium features.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-
-                // Features Card (showing what's included)
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.3f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            } else if (uiState.isPremium && uiState.isTrial) {
+                // ── Premium Trial Active State ──
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = BrandOrange.copy(alpha = 0.1f),
+                    border = BorderStroke(2.dp, BrandOrange),
+                    modifier = Modifier.size(80.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text(
-                            text = "Everything in Premium:",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = SuccessGreen
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = "Premium Trial",
+                            tint = BrandAmber,
+                            modifier = Modifier.size(40.dp)
                         )
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-
-                        PremiumFeatureRow(text = "Unlimited view & edit share links")
-                        PremiumFeatureRow(text = "Real-time sync to online communities")
-                        PremiumFeatureRow(text = "Complete version restoration history")
-                        PremiumFeatureRow(text = "Pin lock access controls")
-                        PremiumFeatureRow(text = "Advanced full-text search engine")
                     }
                 }
+
+                Text(
+                    text = "You're on a 1-day premium trial",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Black,
+                    color = BrandOrange,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "Enjoy premium features during your trial period. Upgrade to keep cloud sync and attachments.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             } else {
                 // ── Upgrade State (not premium) ──
-
-                // Header with glowing Star Badge
                 Surface(
                     shape = RoundedCornerShape(24.dp),
                     color = BrandOrange.copy(alpha = 0.1f),
@@ -162,41 +167,51 @@ fun PremiumScreen(
                 )
 
                 Text(
-                    text = "Unlock advanced sharing, real-time community sync, and unlimited document versions.",
+                    text = "Unlock advanced sharing, cloud community sync, and unlimited document versions.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
+            }
 
-                // Features Card
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, BrandAmber.copy(alpha = 0.3f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            // Plan Comparison Card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(20.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text(
-                            text = "Everything in Premium:",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = BrandOrange
-                        )
-
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
-
-                        PremiumFeatureRow(text = "Unlimited view & edit share links")
-                        PremiumFeatureRow(text = "Real-time sync to online communities")
-                        PremiumFeatureRow(text = "Complete version restoration history")
-                        PremiumFeatureRow(text = "Pin lock access controls")
-                        PremiumFeatureRow(text = "Advanced full-text search engine")
+                    Text(
+                        text = "Compare Plans",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Text("", modifier = Modifier.weight(1.2f), fontWeight = FontWeight.Bold)
+                        Text("Free", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Premium", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = BrandOrange)
                     }
+                    
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
+                    
+                    PlanComparisonRow(feature = "Notes Limit", free = "50 notes", premium = "Unlimited")
+                    PlanComparisonRow(feature = "Character Limit", free = "20k chars", premium = "100k chars")
+                    PlanComparisonRow(feature = "Share Links", free = "3 links", premium = "Unlimited")
+                    PlanComparisonRow(feature = "Storage", free = "Local-only", premium = "Cloud Sync")
+                    PlanComparisonRow(feature = "Note Locking", free = "No", premium = "Yes")
+                    PlanComparisonRow(feature = "Attachments", free = "No", premium = "Up to 20")
                 }
+            }
 
+            if (!uiState.isPremium || uiState.isTrial) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Start upgrade button
@@ -243,6 +258,36 @@ fun PremiumScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+fun PlanComparisonRow(feature: String, free: String, premium: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = feature,
+            modifier = Modifier.weight(1.2f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = free,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = premium,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            color = BrandOrange
+        )
     }
 }
 

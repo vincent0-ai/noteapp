@@ -13,6 +13,8 @@ import kotlinx.coroutines.launch
 data class PremiumUiState(
     val isLoading: Boolean = false,
     val isPremium: Boolean = false,
+    val isTrial: Boolean = false,
+    val trialDaysRemaining: Int = 0,
     val successMessage: String? = null,
     val error: String? = null
 )
@@ -22,11 +24,42 @@ class PremiumViewModel : ViewModel() {
         private set
 
     init {
-        uiState = uiState.copy(isPremium = SessionManager.accountTier == "premium")
+        uiState = uiState.copy(
+            isPremium = SessionManager.accountTier == "premium",
+            isTrial = SessionManager.isTrial,
+            trialDaysRemaining = SessionManager.trialDaysRemaining
+        )
+    }
+
+    fun refreshPremiumStatus() {
+        uiState = uiState.copy(
+            isPremium = SessionManager.accountTier == "premium",
+            isTrial = SessionManager.isTrial,
+            trialDaysRemaining = SessionManager.trialDaysRemaining
+        )
+        viewModelScope.launch {
+            try {
+                val profile = ApiClient.apiService.getProfile()
+                SessionManager.accountTier = profile.account_tier
+                SessionManager.isTrial = profile.is_trial
+                SessionManager.trialDaysRemaining = profile.trial_days_remaining
+                uiState = uiState.copy(
+                    isPremium = profile.account_tier == "premium",
+                    isTrial = profile.is_trial,
+                    trialDaysRemaining = profile.trial_days_remaining
+                )
+            } catch (e: Exception) {
+                uiState = uiState.copy(
+                    isPremium = SessionManager.accountTier == "premium",
+                    isTrial = SessionManager.isTrial,
+                    trialDaysRemaining = SessionManager.trialDaysRemaining
+                )
+            }
+        }
     }
 
     fun activatePremium() {
-        if (uiState.isPremium) return
+        if (uiState.isPremium && !uiState.isTrial) return
         uiState = uiState.copy(isLoading = true, error = null, successMessage = null)
         viewModelScope.launch {
             try {
@@ -35,10 +68,14 @@ class PremiumViewModel : ViewModel() {
                     try {
                         val profile = ApiClient.apiService.getProfile()
                         SessionManager.accountTier = profile.account_tier
+                        SessionManager.isTrial = profile.is_trial
+                        SessionManager.trialDaysRemaining = profile.trial_days_remaining
                     } catch (_: Exception) { }
                     uiState = uiState.copy(
                         isLoading = false,
                         isPremium = true,
+                        isTrial = SessionManager.isTrial,
+                        trialDaysRemaining = SessionManager.trialDaysRemaining,
                         successMessage = response.message ?: "Premium activated!"
                     )
                 } else {
