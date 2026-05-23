@@ -36,14 +36,11 @@ fun EchoWithinApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     
-    // Bottom bar is shown strictly only on the 4 main home tabs and when authenticated
-    val hasValidToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
-    val showBottomBar = hasValidToken && (
-        currentRoute == AppRoute.Home ||
+    // Bottom bar is shown on the 4 main home tabs
+    val showBottomBar = currentRoute == AppRoute.Home ||
         currentRoute == AppRoute.Search ||
         currentRoute == AppRoute.Premium ||
         currentRoute == AppRoute.Settings
-    )
 
     // Wire the global 401 interceptor: clear session and redirect to Welcome
     LaunchedEffect(navController) {

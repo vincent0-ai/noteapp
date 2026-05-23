@@ -228,14 +228,28 @@ fun NoteDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    IconButton(onClick = onShare) {
+                    IconButton(onClick = {
+                        if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
+                            android.widget.Toast.makeText(context, "Sign in or create an account to share notes!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            onShare()
+                        }
+                    }) {
                         Icon(Icons.Default.Share, contentDescription = "Share", tint = BrandOrange)
                     }
-                    IconButton(onClick = onVersions) {
+                    IconButton(onClick = {
+                        if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
+                            android.widget.Toast.makeText(context, "Sign in or create an account to view versions!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            onVersions()
+                        }
+                    }) {
                         Icon(Icons.Default.History, contentDescription = "Versions", tint = BrandAmber)
                     }
                     IconButton(onClick = {
-                        if (com.example.echowithin.data.network.SessionManager.accountTier == "free") {
+                        val isGuest = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()
+                        val isFree = com.example.echowithin.data.network.SessionManager.accountTier == "free"
+                        if (isGuest || isFree) {
                             android.widget.Toast.makeText(context, "Upgrade to Premium to lock notes!", android.widget.Toast.LENGTH_SHORT).show()
                         } else {
                             onToggleLock { newLocked ->

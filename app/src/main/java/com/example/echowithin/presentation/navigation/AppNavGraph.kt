@@ -128,7 +128,10 @@ fun AppNavGraph(
         composable(AppRoute.Welcome) {
             WelcomeScreen(
                 onGetStarted = {
-                    navController.navigate(AppRoute.Login) {
+                    navController.navigate(AppRoute.Login)
+                },
+                onContinueOffline = {
+                    navController.navigate(AppRoute.Home) {
                         popUpTo(AppRoute.Welcome) { inclusive = true }
                     }
                 }
@@ -195,7 +198,13 @@ fun AppNavGraph(
                 error = notesViewModel.uiState.error,
                 onNoteClick = { noteId -> navController.navigate(AppRoute.detail(noteId)) },
                 onNewNoteClick = { navController.navigate(AppRoute.editor(noteId = null)) },
-                onSyncClick = { notesViewModel.syncNotes() },
+                onSyncClick = {
+                    if (SessionManager.token.isNullOrBlank() || SessionManager.token == "null") {
+                        android.widget.Toast.makeText(context, "Sign in or create an account to sync notes!", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        notesViewModel.syncNotes()
+                    }
+                },
                 onRetryClick = { notesViewModel.loadNotes() },
                 // Lock-related
                 hasPin = appLockViewModel.uiState.hasPin,
@@ -368,6 +377,9 @@ fun AppNavGraph(
                             popUpTo(AppRoute.Home) { inclusive = true }
                         }
                     }
+                },
+                onLoginClick = {
+                    navController.navigate(AppRoute.Login)
                 },
                 onAppLockClick = { navController.navigate(AppRoute.AppLock) },
                 onWebsiteClick = {

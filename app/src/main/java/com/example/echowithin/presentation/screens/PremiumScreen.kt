@@ -187,7 +187,7 @@ fun PremiumScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        text = "Compare Plans",
+                        text = "Compare Server Sync & Backup",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface
@@ -196,18 +196,19 @@ fun PremiumScreen(
                     
                     Row(modifier = Modifier.fillMaxWidth()) {
                         Text("", modifier = Modifier.weight(1.2f), fontWeight = FontWeight.Bold)
-                        Text("Free", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Free / Guest", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text("Premium", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = BrandOrange)
                     }
                     
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                     
-                    PlanComparisonRow(feature = "Notes Limit", free = "50 notes", premium = "Unlimited")
-                    PlanComparisonRow(feature = "Character Limit", free = "20k chars", premium = "100k chars")
-                    PlanComparisonRow(feature = "Share Links", free = "3 links", premium = "Unlimited")
-                    PlanComparisonRow(feature = "Storage", free = "Local-only", premium = "Cloud Sync")
-                    PlanComparisonRow(feature = "Note Locking", free = "No", premium = "Yes")
-                    PlanComparisonRow(feature = "Attachments", free = "No", premium = "Up to 20")
+                    PlanComparisonRow(feature = "Local Notes Count", free = "Unlimited", premium = "Unlimited")
+                    PlanComparisonRow(feature = "Local Note Size", free = "Unlimited", premium = "Unlimited")
+                    PlanComparisonRow(feature = "Cloud Backup Limit", free = "No Backup (Offline)", premium = "Unlimited (Backed Up)")
+                    PlanComparisonRow(feature = "Sync Note Size", free = "No Sync (Offline)", premium = "Up to 100k chars")
+                    PlanComparisonRow(feature = "Share Links", free = "Up to 3 links", premium = "Unlimited links")
+                    PlanComparisonRow(feature = "Note Locking", free = "No lock", premium = "Secure PIN lock")
+                    PlanComparisonRow(feature = "Media Attachments", free = "No media", premium = "Up to 20 media")
                 }
             }
 

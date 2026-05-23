@@ -21,6 +21,7 @@ import com.example.echowithin.ui.theme.BrandAmber
 @Composable
 fun WelcomeScreen(
     onGetStarted: () -> Unit,
+    onContinueOffline: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Scaffold(
@@ -98,10 +99,11 @@ fun WelcomeScreen(
                 }
             }
 
-            // Bottom section with Get Started button
+            // Bottom section with Get Started & Continue Offline buttons
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(bottom = 32.dp)
+                modifier = Modifier.padding(bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Button(
                     onClick = onGetStarted,
@@ -115,7 +117,25 @@ fun WelcomeScreen(
                     )
                 ) {
                     Text(
-                        text = "Get Started",
+                        text = "Sign In / Register",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = onContinueOffline,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, BrandOrange),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = BrandOrange
+                    )
+                ) {
+                    Text(
+                        text = "Continue Offline",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

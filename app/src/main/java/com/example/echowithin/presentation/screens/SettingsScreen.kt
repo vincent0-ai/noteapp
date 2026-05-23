@@ -31,11 +31,13 @@ import androidx.compose.runtime.*
 @Composable
 fun SettingsScreen(
     onLogout: () -> Unit,
+    onLoginClick: () -> Unit,
     onAppLockClick: () -> Unit,
     onWebsiteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val username = SessionManager.username ?: "User"
+    val isLoggedIn = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+    val username = if (isLoggedIn) (SessionManager.username ?: "User") else "Guest User"
     var showSyncDialog by remember { mutableStateOf(false) }
     var currentSyncMode by remember { mutableStateOf(SessionManager.syncMode) }
 
@@ -170,9 +172,9 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "Sync status: Active",
+                            text = if (isLoggedIn) "Sync status: Active" else "Sync status: Offline (No Account)",
                             style = MaterialTheme.typography.bodySmall,
-                            color = BrandAmber
+                            color = if (isLoggedIn) BrandAmber else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -231,29 +233,57 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             // Logout action
-            Button(
-                onClick = onLogout,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ErrorRed.copy(alpha = 0.1f),
-                    contentColor = ErrorRed
-                ),
-                border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f))
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Filled.ExitToApp,
-                    contentDescription = "Logout",
-                    tint = ErrorRed
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Logout Session",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+            if (isLoggedIn) {
+                // Logout action
+                Button(
+                    onClick = onLogout,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ErrorRed.copy(alpha = 0.1f),
+                        contentColor = ErrorRed
+                    ),
+                    border = BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f))
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ExitToApp,
+                        contentDescription = "Logout",
+                        tint = ErrorRed
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Logout Session",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            } else {
+                // Login action
+                Button(
+                    onClick = onLoginClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = BrandOrange,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = "Sign In",
+                        tint = Color.White
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Sign In / Create Account",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         }
     }

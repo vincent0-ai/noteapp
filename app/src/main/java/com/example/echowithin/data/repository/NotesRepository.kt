@@ -20,8 +20,9 @@ class NotesRepository {
             // 1. Immediately return local notes
             val localNotes = dbHelper.getAllNotes()
             
-            // 2. If Automatic Sync is active, trigger sync in the background
-            if (SessionManager.syncMode == "automatic") {
+            // 2. If Automatic Sync is active and user is logged in, trigger sync in the background
+            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+            if (SessionManager.syncMode == "automatic" && hasToken) {
                 try {
                     syncNotesInternal()
                 } catch (e: Exception) {
@@ -36,7 +37,10 @@ class NotesRepository {
 
     suspend fun syncNotes(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            syncNotesInternal()
+            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+            if (hasToken) {
+                syncNotesInternal()
+            }
         }
     }
 
@@ -48,7 +52,8 @@ class NotesRepository {
             val pending = dbHelper.getPendingNotes()
             for (note in pending) {
                 try {
-                    when (note.pendingOp) {
+                    val op = if (note.pendingOp == "none" || note.pendingOp.isBlank()) "create" else note.pendingOp
+                    when (op) {
                         "create" -> {
                             val response = api.createNote(
                                 CreateNoteRequest(
@@ -132,20 +137,7 @@ class NotesRepository {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
-            val isFree = SessionManager.accountTier == "free"
-            if (isFree) {
-                val currentCount = dbHelper.getAllNotes().size
-                if (currentCount >= 50) {
-                    throw Exception("Free plan limit reached: You can create up to 50 notes. Upgrade to Premium for unlimited notes.")
-                }
-            }
-            
-            val limit = if (isFree) 20000 else 100000
-            if (content.length > limit) {
-                val planName = if (isFree) "Free" else "Premium"
-                throw Exception("$planName plan limit reached: Notes cannot exceed ${limit / 1000}k characters.")
-            }
-            
+            val isFree = SessionManager.accountTier == "free" || SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
             val pendingOp = if (isFree) "none" else "create"
             val note = AppNote(
                 id = tempId,
@@ -182,13 +174,7 @@ class NotesRepository {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
-            val isFree = SessionManager.accountTier == "free"
-            val limit = if (isFree) 20000 else 100000
-            if (content.length > limit) {
-                val planName = if (isFree) "Free" else "Premium"
-                throw Exception("$planName plan limit reached: Notes cannot exceed ${limit / 1000}k characters.")
-            }
-            
+            val isFree = SessionManager.accountTier == "free" || SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
             val existing = dbHelper.getNoteById(noteId)
             val pendingOp = if (isFree) "none" else (if (existing?.pendingOp == "create") "create" else "edit")
             
