@@ -21,7 +21,7 @@ class NotesRepository {
             val localNotes = dbHelper.getAllNotes()
             
             // 2. If Automatic Sync is active, trigger sync in the background
-            if (SessionManager.syncMode == "automatic" && SessionManager.accountTier != "free") {
+            if (SessionManager.syncMode == "automatic") {
                 try {
                     syncNotesInternal()
                 } catch (e: Exception) {
@@ -36,64 +36,66 @@ class NotesRepository {
 
     suspend fun syncNotes(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            if (SessionManager.accountTier != "free") {
-                syncNotesInternal()
-            }
+            syncNotesInternal()
         }
     }
 
     private suspend fun syncNotesInternal() {
-        // 1. Push pending local changes to the server
-        val pending = dbHelper.getPendingNotes()
-        for (note in pending) {
-            try {
-                when (note.pendingOp) {
-                    "create" -> {
-                        val response = api.createNote(
-                            CreateNoteRequest(
-                                content = note.content,
-                                reference = note.reference,
-                                tags = note.tags
+        val isFree = SessionManager.accountTier == "free"
+
+        // 1. Push pending local changes to the server (only if NOT free tier)
+        if (!isFree) {
+            val pending = dbHelper.getPendingNotes()
+            for (note in pending) {
+                try {
+                    when (note.pendingOp) {
+                        "create" -> {
+                            val response = api.createNote(
+                                CreateNoteRequest(
+                                    content = note.content,
+                                    reference = note.reference,
+                                    tags = note.tags
+                                )
                             )
-                        )
-                        if (response.success && !response.id.isNullOrBlank()) {
-                            // Delete local temp note and save new synced note
-                            dbHelper.deletePhysically(note.id)
-                            dbHelper.saveNote(note.copy(id = response.id, isSynced = true, pendingOp = "none"))
-                        }
-                    }
-                    "edit" -> {
-                        val response = api.editNote(
-                            noteId = note.id,
-                            body = CreateNoteRequest(
-                                content = note.content,
-                                reference = note.reference,
-                                tags = note.tags
-                            )
-                        )
-                        if (response.success) {
-                            dbHelper.saveNote(note.copy(isSynced = true, pendingOp = "none"))
-                        }
-                    }
-                    "delete" -> {
-                        try {
-                            val response = api.deleteNote(note.id)
-                            if (response.success || response.error?.contains("not found", ignoreCase = true) == true) {
+                            if (response.success && !response.id.isNullOrBlank()) {
+                                // Delete local temp note and save new synced note
                                 dbHelper.deletePhysically(note.id)
-                            }
-                        } catch (e: retrofit2.HttpException) {
-                            if (e.code() == 404) {
-                                dbHelper.deletePhysically(note.id)
-                            } else {
-                                throw e
+                                dbHelper.saveNote(note.copy(id = response.id, isSynced = true, pendingOp = "none"))
                             }
                         }
+                        "edit" -> {
+                            val response = api.editNote(
+                                noteId = note.id,
+                                body = CreateNoteRequest(
+                                    content = note.content,
+                                    reference = note.reference,
+                                    tags = note.tags
+                                )
+                            )
+                            if (response.success) {
+                                dbHelper.saveNote(note.copy(isSynced = true, pendingOp = "none"))
+                            }
+                        }
+                        "delete" -> {
+                            try {
+                                val response = api.deleteNote(note.id)
+                                if (response.success || response.error?.contains("not found", ignoreCase = true) == true) {
+                                    dbHelper.deletePhysically(note.id)
+                                }
+                            } catch (e: retrofit2.HttpException) {
+                                if (e.code() == 404) {
+                                    dbHelper.deletePhysically(note.id)
+                                } else {
+                                    throw e
+                                }
+                            }
+                        }
                     }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    // Stop syncing remaining items if network error occurs to preserve ordering
+                    break
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // Stop syncing remaining items if network error occurs to preserve ordering
-                break
             }
         }
 
