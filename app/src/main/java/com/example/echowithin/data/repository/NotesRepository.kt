@@ -223,6 +223,21 @@ class NotesRepository {
         }
     }
 
+    suspend fun toggleNoteLock(noteId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = api.toggleNoteLock(noteId)
+            if (response.success) {
+                val local = dbHelper.getNoteById(noteId)
+                if (local != null) {
+                    dbHelper.saveNote(local.copy(isLocked = response.is_locked))
+                }
+                response.is_locked
+            } else {
+                throw Exception(response.error ?: "Toggle lock failed")
+            }
+        }
+    }
+
     fun clearLocalData() {
         dbHelper.clearAll()
     }

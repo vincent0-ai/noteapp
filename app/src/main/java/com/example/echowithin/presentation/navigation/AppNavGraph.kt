@@ -209,7 +209,7 @@ fun AppNavGraph(
                     try {
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://echowithin.xyz/shared/$shareId")
+                            android.net.Uri.parse("https://echowithin.xyz/share/note/$shareId")
                         ).apply {
                             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
@@ -288,8 +288,10 @@ fun AppNavGraph(
                         navController.popBackStack()
                     }
                 },
-                onToggleLock = {
-                    notesViewModel.toggleNoteLock(noteId) {}
+                onToggleLock = { onDone ->
+                    notesViewModel.toggleNoteLock(noteId) { newLocked ->
+                        onDone(newLocked)
+                    }
                 }
             )
         }
@@ -314,7 +316,7 @@ fun AppNavGraph(
                     try {
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://echowithin.xyz/shared/$shareId")
+                            android.net.Uri.parse("https://echowithin.xyz/share/note/$shareId")
                         ).apply {
                             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         }

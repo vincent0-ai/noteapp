@@ -45,7 +45,7 @@ fun NoteDetailScreen(
     onShare: () -> Unit,
     onVersions: () -> Unit,
     onDelete: () -> Unit,
-    onToggleLock: () -> Unit,
+    onToggleLock: ((Boolean) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var noteState by remember { mutableStateOf(initialNote) }
@@ -233,7 +233,11 @@ fun NoteDetailScreen(
                     IconButton(onClick = onVersions) {
                         Icon(Icons.Default.History, contentDescription = "Versions", tint = BrandAmber)
                     }
-                    IconButton(onClick = onToggleLock) {
+                    IconButton(onClick = {
+                        onToggleLock { newLocked ->
+                            noteState = noteState?.copy(isLocked = newLocked)
+                        }
+                    }) {
                         Icon(
                             if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
                             contentDescription = "Toggle Lock",

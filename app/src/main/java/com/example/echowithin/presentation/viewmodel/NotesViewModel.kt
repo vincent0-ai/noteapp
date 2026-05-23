@@ -212,15 +212,14 @@ class NotesViewModel(
 
     fun toggleNoteLock(noteId: String, onDone: (Boolean) -> Unit) {
         viewModelScope.launch {
-            try {
-                val response = com.example.echowithin.data.network.ApiClient.apiService.toggleNoteLock(noteId)
-                if (response.success) {
+            repository.toggleNoteLock(noteId)
+                .onSuccess { isLocked ->
                     loadNotes()
-                    onDone(response.is_locked)
+                    onDone(isLocked)
                 }
-            } catch (e: Exception) {
-                uiState = uiState.copy(error = e.message ?: "Could not toggle lock")
-            }
+                .onFailure { t ->
+                    uiState = uiState.copy(error = t.message ?: "Could not toggle lock")
+                }
         }
     }
 

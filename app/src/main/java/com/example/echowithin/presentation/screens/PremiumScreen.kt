@@ -31,6 +31,7 @@ fun PremiumScreen(
     viewModel: PremiumViewModel = viewModel(factory = PremiumViewModel.factory()),
     modifier: Modifier = Modifier
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val uiState = viewModel.uiState
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -196,10 +197,19 @@ fun PremiumScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Start trial button
+                // Start upgrade button
                 Button(
-                    onClick = { viewModel.activatePremium() },
-                    enabled = !uiState.isLoading,
+                    onClick = {
+                        try {
+                            val intent = android.content.Intent(
+                                android.content.Intent.ACTION_VIEW,
+                                android.net.Uri.parse("https://echowithin.xyz/profile_settings")
+                            ).apply {
+                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } catch (_: Exception) {}
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -209,19 +219,15 @@ fun PremiumScreen(
                         contentColor = Color.White
                     )
                 ) {
-                    if (uiState.isLoading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
-                    } else {
-                        Text(
-                            text = "Start 1-Day Trial",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Text(
+                        text = "Upgrade via Website (KSh 50/mo)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
 
                 Text(
-                    text = "Trial automatically rolls into standard monthly sync subscription. Cancel anytime.",
+                    text = "Please open the EchoWithin profile settings page on the web platform to complete your subscription payments safely.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     textAlign = TextAlign.Center,
