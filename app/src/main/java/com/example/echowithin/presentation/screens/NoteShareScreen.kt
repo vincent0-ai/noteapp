@@ -13,12 +13,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextAlign
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.viewmodel.NoteShareUiState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Comment
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Launch
 import androidx.compose.material.icons.filled.Attachment
@@ -31,6 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Lock
 import com.example.echowithin.data.network.SessionManager
+import androidx.compose.ui.window.Dialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,11 +41,9 @@ fun NoteShareScreen(
     onCreateShare: (permissions: String, expiresIn: String?, accessCode: String?, surpriseTheme: String, useTypewriter: Boolean, autoApprove: Boolean, photoUri: String?, audioUri: String?) -> Unit,
     onSelectShare: (String) -> Unit,
     onRevokeShare: (String) -> Unit,
-    onAddComment: (String) -> Unit,
     onOpenShareLink: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var comment by remember { mutableStateOf("") }
     var showCreateDialog by remember { mutableStateOf(false) }
 
     // Share creation dialog state
@@ -280,136 +279,47 @@ fun NoteShareScreen(
                             }
                         }
                     }
-                }
             }
 
-            // Comments Section (Only shown if a share is selected)
-            if (uiState.selectedShareId != null) {
+            // Attachments section (Only shown if a share is selected)
+            if (uiState.selectedShareId != null && uiState.attachments.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Share Comments",
+                        text = "Attachments",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = BrandAmber
                     )
                 }
 
-                item {
+                items(uiState.attachments) { attachment ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            OutlinedTextField(
-                                value = comment,
-                                onValueChange = { comment = it },
-                                placeholder = { Text("Write a comment...") },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = BrandOrange,
-                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                                )
-                            )
-                            Button(
-                                onClick = {
-                                    onAddComment(comment)
-                                    comment = ""
-                                },
-                                enabled = comment.isNotBlank(),
-                                modifier = Modifier.align(Alignment.End),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
-                            ) {
-                                Icon(Icons.Default.Comment, contentDescription = "Post Comment", modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Post Comment")
-                            }
-                        }
-                    }
-                }
-
-                if (uiState.comments.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No comments on this share link yet.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(vertical = 4.dp)
-                        )
-                    }
-                } else {
-                    items(uiState.comments) { commentItem ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
+                            Icon(Icons.Default.Attachment, contentDescription = "Attachment", tint = BrandOrange)
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = commentItem.author_name,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = BrandOrange
-                                )
-                                Text(
-                                    text = commentItem.content,
+                                    text = attachment.filename ?: "Attachment",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontWeight = FontWeight.Bold
                                 )
-                            }
-                        }
-                    }
-                }
-
-                // Attachments section
-                if (uiState.attachments.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = "Attachments",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = BrandAmber
-                        )
-                    }
-
-                    items(uiState.attachments) { attachment ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Icon(Icons.Default.Attachment, contentDescription = "Attachment", tint = BrandOrange)
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = attachment.filename ?: "Attachment",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = attachment.file_type ?: "unknown",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = attachment.file_url ?: "",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = BrandAmber
-                                    )
-                                }
+                                Text(
+                                    text = attachment.file_type ?: "unknown",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = attachment.file_url ?: "",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = BrandAmber
+                                )
                             }
                         }
                     }
@@ -813,4 +723,46 @@ fun NoteShareScreen(
             }
         )
     }
+
+    // Creating Share Link Loading Dialog Overlay
+    if (uiState.isLoading) {
+        Dialog(onDismissRequest = {}) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = BrandOrange,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "Creating Share Link...",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandOrange
+                    )
+                    Text(
+                        text = "Please wait while we upload custom media and generate your secure share link.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
 }
+}
+

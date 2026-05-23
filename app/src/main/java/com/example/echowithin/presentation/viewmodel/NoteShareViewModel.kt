@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.echowithin.data.model.AttachmentDto
-import com.example.echowithin.data.model.CommentDto
 import com.example.echowithin.data.model.ShareDto
 import com.example.echowithin.data.repository.ShareRepository
 import kotlinx.coroutines.launch
@@ -18,7 +17,6 @@ data class NoteShareUiState(
     val noteId: String = "",
     val shares: List<ShareDto> = emptyList(),
     val selectedShareId: String? = null,
-    val comments: List<CommentDto> = emptyList(),
     val attachments: List<AttachmentDto> = emptyList()
 )
 
@@ -70,33 +68,19 @@ class NoteShareViewModel(
     fun loadShareDetails(shareId: String) {
         uiState = uiState.copy(isLoading = true, error = null, selectedShareId = shareId)
         viewModelScope.launch {
-            val commentsResult = repository.getComments(shareId)
-            val attachmentsResult = repository.getAttachments(shareId)
-            when {
-                commentsResult.isSuccess && attachmentsResult.isSuccess -> {
+            repository.getAttachments(shareId)
+                .onSuccess { attachments ->
                     uiState = uiState.copy(
                         isLoading = false,
-                        comments = commentsResult.getOrDefault(emptyList()),
-                        attachments = attachmentsResult.getOrDefault(emptyList())
+                        attachments = attachments
                     )
                 }
-                else -> uiState = uiState.copy(
-                    isLoading = false,
-                    error = commentsResult.exceptionOrNull()?.message
-                        ?: attachmentsResult.exceptionOrNull()?.message
-                        ?: "Could not load share details"
-                )
-            }
-        }
-    }
-
-    fun addComment(content: String) {
-        val shareId = uiState.selectedShareId ?: return
-        uiState = uiState.copy(isLoading = true, error = null)
-        viewModelScope.launch {
-            repository.addComment(shareId, content)
-                .onSuccess { loadShareDetails(shareId) }
-                .onFailure { uiState = uiState.copy(isLoading = false, error = it.message ?: "Could not add comment") }
+                .onFailure { exception ->
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Could not load share details"
+                    )
+                }
         }
     }
 

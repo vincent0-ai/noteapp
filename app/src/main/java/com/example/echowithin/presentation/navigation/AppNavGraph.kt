@@ -311,7 +311,6 @@ fun AppNavGraph(
                 },
                 onSelectShare = { shareViewModel.selectShare(it) },
                 onRevokeShare = { shareViewModel.revokeShare(it) },
-                onAddComment = { shareViewModel.addComment(it) },
                 onOpenShareLink = { shareId ->
                     try {
                         val intent = android.content.Intent(

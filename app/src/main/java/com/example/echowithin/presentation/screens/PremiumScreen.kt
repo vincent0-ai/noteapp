@@ -24,6 +24,8 @@ import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.SuccessGreen
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echowithin.presentation.viewmodel.PremiumViewModel
+import com.example.echowithin.data.network.SessionManager
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -201,9 +203,15 @@ fun PremiumScreen(
                 Button(
                     onClick = {
                         try {
+                            val username = SessionManager.username ?: ""
+                            val upgradeUrl = if (username.isNotBlank()) {
+                                "https://echowithin.xyz/profile/$username/settings"
+                            } else {
+                                "https://echowithin.xyz/profile_settings"
+                            }
                             val intent = android.content.Intent(
                                 android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse("https://echowithin.xyz/profile_settings")
+                                android.net.Uri.parse(upgradeUrl)
                             ).apply {
                                 addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
