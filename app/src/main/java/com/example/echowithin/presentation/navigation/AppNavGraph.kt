@@ -147,6 +147,9 @@ fun AppNavGraph(
                 },
                 onNavigateToRegister = {
                     navController.navigate(AppRoute.Register)
+                },
+                onNavigateToConfirm = { email ->
+                    navController.navigate(AppRoute.confirmEmail(email))
                 }
             )
         }

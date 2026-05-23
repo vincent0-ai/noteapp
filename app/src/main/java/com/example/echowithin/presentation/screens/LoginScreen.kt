@@ -26,7 +26,8 @@ import com.example.echowithin.ui.theme.BrandAmber
 fun LoginScreen(
     viewModel: AuthViewModel,
     onLoginSuccess: () -> Unit,
-    onNavigateToRegister: () -> Unit
+    onNavigateToRegister: () -> Unit,
+    onNavigateToConfirm: (String) -> Unit
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -36,6 +37,9 @@ fun LoginScreen(
     LaunchedEffect(state) {
         if (state is AuthUiState.Success) {
             onLoginSuccess()
+            viewModel.resetState()
+        } else if (state is AuthUiState.UnconfirmedEmail) {
+            onNavigateToConfirm(state.email)
             viewModel.resetState()
         }
     }

@@ -18,6 +18,7 @@ sealed class AuthUiState {
     object Loading : AuthUiState()
     object Success : AuthUiState()
     data class Error(val message: String) : AuthUiState()
+    data class UnconfirmedEmail(val email: String) : AuthUiState()
 }
 
 class AuthViewModel(
@@ -43,7 +44,11 @@ class AuthViewModel(
                         loginState = AuthUiState.Success
                         ApiClient.registerFcmToken(com.example.echowithin.EchoWithinApplication.instance)
                     } else {
-                        loginState = AuthUiState.Error(response.error ?: "Login failed")
+                        if (response.confirmed == false && !response.email.isNullOrBlank()) {
+                            loginState = AuthUiState.UnconfirmedEmail(response.email)
+                        } else {
+                            loginState = AuthUiState.Error(response.error ?: "Login failed")
+                        }
                     }
                 }
                 .onFailure { t ->

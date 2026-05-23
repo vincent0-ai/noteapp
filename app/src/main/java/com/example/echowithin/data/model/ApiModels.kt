@@ -15,7 +15,8 @@ data class LoginResponse(
     val username: String? = null,
     val email: String? = null,
     val x_app_token: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val confirmed: Boolean? = true
 )
 
 data class CreateNoteRequest(
