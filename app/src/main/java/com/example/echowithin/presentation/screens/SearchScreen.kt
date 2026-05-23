@@ -1,0 +1,200 @@
+package com.example.echowithin.presentation.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
+import com.example.echowithin.presentation.viewmodel.NotesViewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import com.example.echowithin.ui.theme.BrandOrange
+import com.example.echowithin.ui.theme.BrandAmber
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchScreen(
+    viewModel: NotesViewModel,
+    onNoteClick: (String) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    val results = viewModel.uiState.searchResults
+    val isLoading = viewModel.uiState.isLoading
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { EchoWithinTopBarTitle() },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            )
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 16.dp)
+        ) {
+            // Search field
+            OutlinedTextField(
+                value = query,
+                onValueChange = {
+                    query = it
+                    viewModel.searchNotes(it)
+                },
+                placeholder = { Text("Search your unspoken thoughts...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp),
+                shape = RoundedCornerShape(12.dp),
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search icon",
+                        tint = BrandOrange
+                    )
+                },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = BrandOrange,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                )
+            )
+
+            if (isLoading && results.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(color = BrandOrange)
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
+                    items(results) { hit ->
+                        Card(
+                            onClick = { onNoteClick(hit.id) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = parseSearchSnippet(hit.snippet.orEmpty(), BrandOrange),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (hit.created_at != null) {
+                                        Text(
+                                            text = "Created: ${hit.created_at.take(10)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                        )
+                                    }
+                                    
+                                    Text(
+                                        text = "View details →",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BrandAmber,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    if (results.isEmpty() && query.isNotEmpty() && !isLoading) {
+                        item {
+                            Text(
+                                text = "No results found for \"$query\"",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fun parseSearchSnippet(snippet: String, highlightColor: Color): AnnotatedString {
+    val cleanSnippet = stripMarkdown(snippet)
+
+    return buildAnnotatedString {
+        val markStartTag = "<mark class=\"search-highlight\">"
+        val markEndTag = "</mark>"
+        var currentIndex = 0
+
+        while (true) {
+            val startIdx = cleanSnippet.indexOf(markStartTag, currentIndex)
+            if (startIdx == -1) {
+                append(cleanSnippet.substring(currentIndex))
+                break
+            }
+            append(cleanSnippet.substring(currentIndex, startIdx))
+            val endIdx = cleanSnippet.indexOf(markEndTag, startIdx + markStartTag.length)
+            if (endIdx == -1) {
+                append(cleanSnippet.substring(startIdx))
+                break
+            }
+            val matchText = cleanSnippet.substring(startIdx + markStartTag.length, endIdx)
+            pushStyle(SpanStyle(fontWeight = FontWeight.Bold, color = highlightColor))
+            append(matchText)
+            pop()
+            currentIndex = endIdx + markEndTag.length
+        }
+    }
+}
+
+private fun stripMarkdown(text: String): String {
+    var clean = text
+    clean = clean.replace(Regex("(?m)^#+\\s+"), "")
+    clean = clean.replace(Regex("(?m)^[\\s*+-]*>\\s*"), "")
+    clean = clean.replace(Regex("(?m)^[\\s]*[*+-]\\s+"), "")
+    clean = clean.replace(Regex("\\*\\*|__|\\*|_|~~"), "")
+    clean = clean.replace(Regex("`+"), "")
+    clean = clean.replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
+    clean = clean.replace(Regex("!\\[(.*?)\\]\\(.*?\\)"), "$1")
+    return clean
+}
