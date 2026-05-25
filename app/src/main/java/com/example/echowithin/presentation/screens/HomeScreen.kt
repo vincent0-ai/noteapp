@@ -78,11 +78,26 @@ fun HomeScreen(
     notifications: List<NotificationDto> = emptyList(),
     unreadNotificationsCount: Int = 0,
     onMarkAllRead: () -> Unit = {},
+    // Update-related
+    updateInfo: com.example.echowithin.data.network.UpdateInfo? = null,
+    downloadProgress: Float? = null,
+    onConfirmUpdate: () -> Unit = {},
+    onDismissUpdate: () -> Unit = {},
     // Navigation
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var activeTab by remember { mutableStateOf(HomeTab.NOTES) }
+
+    if (updateInfo != null) {
+        UpdateDialog(
+            versionName = updateInfo.versionName,
+            changelog = updateInfo.changelog,
+            downloadProgress = downloadProgress,
+            onDismiss = onDismissUpdate,
+            onConfirm = onConfirmUpdate
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -1247,4 +1262,94 @@ private fun NoteCardPlaceholder(brush: Brush) {
             }
         }
     }
+}
+
+@Composable
+fun UpdateDialog(
+    versionName: String,
+    changelog: String,
+    downloadProgress: Float?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = { if (downloadProgress == null) onDismiss() },
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = null,
+                    tint = BrandOrange,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("New Update Available!", fontWeight = FontWeight.Bold, color = BrandOrange)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "A new version of EchoWithin ($versionName) is ready.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                if (changelog.isNotBlank()) {
+                    Text(
+                        text = "What's New:",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = changelog,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                }
+                
+                if (downloadProgress != null) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            color = BrandOrange,
+                            trackColor = BrandOrange.copy(alpha = 0.2f),
+                            modifier = Modifier.fillMaxWidth().height(8.dp)
+                        )
+                        Text(
+                            text = "Downloading... ${(downloadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (downloadProgress == null) {
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
+                ) {
+                    Text("Update Now", color = Color.White)
+                }
+            }
+        },
+        dismissButton = {
+            if (downloadProgress == null) {
+                TextButton(onClick = onDismiss) {
+                    Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        },
+        shape = RoundedCornerShape(20.dp),
+        containerColor = MaterialTheme.colorScheme.surface
+    )
 }

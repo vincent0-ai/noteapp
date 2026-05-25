@@ -65,6 +65,7 @@ fun AppNavGraph(
 
     // Validate session then load data on launch
     LaunchedEffect(Unit) {
+        notesViewModel.checkForUpdates(context)
         if (SessionManager.token != null) {
             try {
                 // Call appReauth to verify session/token on server
@@ -237,6 +238,11 @@ fun AppNavGraph(
                 notifications = notesViewModel.uiState.notifications,
                 unreadNotificationsCount = notesViewModel.uiState.unreadNotificationsCount,
                 onMarkAllRead = { notesViewModel.markAllNotificationsAsRead() },
+                // Update-related
+                updateInfo = notesViewModel.uiState.updateInfo,
+                downloadProgress = notesViewModel.uiState.downloadProgress,
+                onConfirmUpdate = { notesViewModel.downloadAndInstallUpdate(context, notesViewModel.uiState.updateInfo?.apkUrl ?: "") },
+                onDismissUpdate = { notesViewModel.dismissUpdate() },
                 // Navigation
                 onSearchClick = { navController.navigate(AppRoute.Search) }
             )

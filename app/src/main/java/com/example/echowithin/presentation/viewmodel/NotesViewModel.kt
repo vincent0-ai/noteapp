@@ -15,6 +15,7 @@ import com.example.echowithin.data.model.NotificationDto
 import com.example.echowithin.data.model.BadgeCountsDto
 import com.example.echowithin.data.model.ProposalDecisionDto
 import com.example.echowithin.data.repository.NotesRepository
+import android.content.Context
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
@@ -33,7 +34,9 @@ data class NotesUiState(
     val sharesLoading: Boolean = false,
     val notifications: List<NotificationDto> = emptyList(),
     val unreadNotificationsCount: Int = 0,
-    val badgeCounts: BadgeCountsDto = BadgeCountsDto(0, 0)
+    val badgeCounts: BadgeCountsDto = BadgeCountsDto(0, 0),
+    val updateInfo: com.example.echowithin.data.network.UpdateInfo? = null,
+    val downloadProgress: Float? = null
 )
 
 class NotesViewModel(
@@ -41,6 +44,33 @@ class NotesViewModel(
 ) : ViewModel() {
     var uiState by mutableStateOf(NotesUiState())
         private set
+
+    fun checkForUpdates(context: Context) {
+        viewModelScope.launch {
+            val updateManager = com.example.echowithin.data.network.AppUpdateManager(context)
+            val info = updateManager.checkForUpdates()
+            if (info.hasUpdate) {
+                uiState = uiState.copy(updateInfo = info)
+            }
+        }
+    }
+
+    fun downloadAndInstallUpdate(context: Context, apkUrl: String) {
+        uiState = uiState.copy(downloadProgress = 0f)
+        viewModelScope.launch {
+            val updateManager = com.example.echowithin.data.network.AppUpdateManager(context)
+            val success = updateManager.downloadAndInstallApk(apkUrl) { progress ->
+                uiState = uiState.copy(downloadProgress = progress)
+            }
+            if (!success) {
+                uiState = uiState.copy(downloadProgress = null, error = "Update download failed")
+            }
+        }
+    }
+
+    fun dismissUpdate() {
+        uiState = uiState.copy(updateInfo = null, downloadProgress = null)
+    }
 
     fun syncNotes() {
         uiState = uiState.copy(isSyncing = true, error = null)
