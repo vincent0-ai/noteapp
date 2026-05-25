@@ -1,4 +1,6 @@
 # EchoWithin Android App
+This note app is adapted from echowithin website. Find the repo [here](https://github.com/vincent0-ai/echowithin) and the website [here](https://echowithin.xyz) 
+It is just the echowithin personal space but note focused, stripping away blog features etc.
 
 Jetpack Compose Android client for EchoWithin APIs.
 
