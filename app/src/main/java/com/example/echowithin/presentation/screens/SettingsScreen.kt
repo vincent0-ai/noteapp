@@ -232,6 +232,20 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
+            // App Version Info
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Version ${com.example.echowithin.BuildConfig.VERSION_NAME} (${com.example.echowithin.BuildConfig.VERSION_CODE})",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            }
+
             // Logout action
             if (isLoggedIn) {
                 // Logout action
