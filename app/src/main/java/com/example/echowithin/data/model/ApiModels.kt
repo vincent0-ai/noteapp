@@ -38,6 +38,7 @@ data class NoteDto(
     val tags: List<String> = emptyList(),
     val is_locked: Boolean = false,
     val is_pinned: Boolean = false,
+    val update_available: Boolean = false,
     val created_at: String? = null,
     val updated_at: String? = null
 )
@@ -70,7 +71,8 @@ data class AppNote(
     val isLocked: Boolean = false,
     val isPinned: Boolean = false,
     val isSynced: Boolean = true,
-    val pendingOp: String = "none"
+    val pendingOp: String = "none",
+    val updateAvailable: Boolean = false
 )
 
 data class ProfileResponse(
@@ -267,4 +269,13 @@ data class NotificationsResponseDto(
     val posts: List<NotificationDto> = emptyList(),
     val unread_count: Int = 0,
     val last_checked: String? = null
+)
+
+data class SyncNoteResponse(
+    val success: Boolean = false,
+    val content: String? = null,
+    val direction: String? = null,
+    val pending_approval: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
 )

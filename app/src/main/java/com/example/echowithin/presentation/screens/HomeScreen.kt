@@ -57,6 +57,7 @@ fun HomeScreen(
     onNewNoteClick: () -> Unit,
     onSyncClick: () -> Unit,
     onRetryClick: () -> Unit,
+    onSyncNoteClick: (String) -> Unit,
     // Lock-related
     hasPin: Boolean,
     isLocked: Boolean,
@@ -195,7 +196,8 @@ fun HomeScreen(
                     isLoading = isLoading,
                     error = error,
                     onNoteClick = onNoteClick,
-                    onRetryClick = onRetryClick
+                    onRetryClick = onRetryClick,
+                    onSyncNoteClick = onSyncNoteClick
                 )
                 HomeTab.LOCKED -> LockedTabContent(
                     lockedNotes = notes.filter { it.isLocked },
@@ -205,7 +207,8 @@ fun HomeScreen(
                     lockLoading = lockLoading,
                     onVerifyPin = onVerifyPin,
                     onSetupPin = onSetupPin,
-                    onNoteClick = onNoteClick
+                    onNoteClick = onNoteClick,
+                    onSyncNoteClick = onSyncNoteClick
                 )
                 HomeTab.ACTIVITY -> ActivityTabContent(
                     proposals = proposals,
@@ -235,7 +238,8 @@ private fun NotesTabContent(
     isLoading: Boolean,
     error: String?,
     onNoteClick: (String) -> Unit,
-    onRetryClick: () -> Unit
+    onRetryClick: () -> Unit,
+    onSyncNoteClick: (String) -> Unit
 ) {
     when {
         isLoading && notes.isEmpty() -> {
@@ -303,7 +307,11 @@ private fun NotesTabContent(
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
                 items(notes, key = { it.id }) { note ->
-                    NoteCard(note = note, onClick = { onNoteClick(note.id) })
+                    NoteCard(
+                        note = note,
+                        onClick = { onNoteClick(note.id) },
+                        onSyncClick = { onSyncNoteClick(note.id) }
+                    )
                 }
             }
         }
@@ -321,7 +329,8 @@ private fun LockedTabContent(
     lockLoading: Boolean,
     onVerifyPin: (String) -> Unit,
     onSetupPin: (String) -> Unit,
-    onNoteClick: (String) -> Unit
+    onNoteClick: (String) -> Unit,
+    onSyncNoteClick: (String) -> Unit
 ) {
     if (!hasPin) {
         // No PIN set up
@@ -487,7 +496,11 @@ private fun LockedTabContent(
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
                 items(lockedNotes, key = { it.id }) { note ->
-                    NoteCard(note = note, onClick = { onNoteClick(note.id) })
+                    NoteCard(
+                        note = note,
+                        onClick = { onNoteClick(note.id) },
+                        onSyncClick = { onSyncNoteClick(note.id) }
+                    )
                 }
             }
         }
@@ -981,7 +994,11 @@ private fun ShareLinkRow(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun NoteCard(note: AppNote, onClick: () -> Unit) {
+fun NoteCard(
+    note: AppNote,
+    onClick: () -> Unit,
+    onSyncClick: (() -> Unit)? = null
+) {
     val strippedContent = remember(note.content) { stripMarkdown(note.content) }
     val previewTitle = remember(strippedContent) {
         strippedContent.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled"
@@ -1054,6 +1071,54 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
                             color = BrandAmber,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
+                    }
+                }
+            }
+
+            if (note.updateAvailable) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = BrandOrange.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.3f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                        .clickable { onSyncClick?.invoke() }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(text = "⚠️", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                text = "Update Available",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandOrange
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Sync Now",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = BrandOrange
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Sync",
+                                tint = BrandOrange,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
                     }
                 }
             }

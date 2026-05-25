@@ -207,6 +207,11 @@ fun AppNavGraph(
                     }
                 },
                 onRetryClick = { notesViewModel.loadNotes() },
+                onSyncNoteClick = { noteId ->
+                    notesViewModel.syncNoteWithOriginal(noteId) { msg ->
+                        android.widget.Toast.makeText(context, msg ?: "Sync failed", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
                 // Lock-related
                 hasPin = appLockViewModel.uiState.hasPin,
                 isLocked = appLockViewModel.uiState.isLocked,

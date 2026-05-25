@@ -92,6 +92,15 @@ class FakeEchoWithinApiService : EchoWithinApiService {
         return CreateNoteResponse(success = false, error = "Note not found")
     }
 
+    override suspend fun syncNote(noteId: String): SyncNoteResponse {
+        val note = notes.firstOrNull { it.id == noteId }
+        return if (note != null) {
+            SyncNoteResponse(success = true, content = note.content, direction = "none", message = "Synced successfully")
+        } else {
+            SyncNoteResponse(success = false, error = "Note not found")
+        }
+    }
+
     override suspend fun getProfile(): ProfileResponse {
         return ProfileResponse(username = "fakeuser", email = "fake@example.local", account_tier = "premium", has_pin = true)
     }

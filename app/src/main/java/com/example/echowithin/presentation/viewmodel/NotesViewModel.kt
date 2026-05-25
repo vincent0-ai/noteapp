@@ -280,6 +280,20 @@ class NotesViewModel(
         }
     }
 
+    fun syncNoteWithOriginal(noteId: String, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            repository.syncNoteWithOriginal(noteId)
+                .onSuccess { response ->
+                    loadNotes()
+                    onDone(response.message ?: "Sync completed")
+                }
+                .onFailure { error ->
+                    uiState = uiState.copy(error = error.message ?: "Sync failed")
+                    onDone(null)
+                }
+        }
+    }
+
     fun getNoteById(noteId: String): AppNote? = uiState.notes.firstOrNull { it.id == noteId }
 
     suspend fun getNoteFromServer(noteId: String): Result<AppNote> {

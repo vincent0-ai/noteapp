@@ -10,7 +10,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
-        private const val DATABASE_VERSION = 1
+        private const val DATABASE_VERSION = 2
 
         const val TABLE_NOTES = "notes"
         const val COLUMN_ID = "id"
@@ -25,6 +25,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         // Sync control flags
         const val COLUMN_IS_SYNCED = "is_synced"
         const val COLUMN_PENDING_OP = "pending_op" // "none", "create", "edit", "delete"
+        const val COLUMN_UPDATE_AVAILABLE = "update_available"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -39,15 +40,26 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $COLUMN_IS_LOCKED INTEGER DEFAULT 0,
                 $COLUMN_IS_PINNED INTEGER DEFAULT 0,
                 $COLUMN_IS_SYNCED INTEGER DEFAULT 1,
-                $COLUMN_PENDING_OP TEXT DEFAULT 'none'
+                $COLUMN_PENDING_OP TEXT DEFAULT 'none',
+                $COLUMN_UPDATE_AVAILABLE INTEGER DEFAULT 0
             )
         """.trimIndent()
         db.execSQL(createTable)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        db.execSQL("DROP TABLE IF EXISTS $TABLE_NOTES")
-        onCreate(db)
+        if (oldVersion < 2) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_UPDATE_AVAILABLE INTEGER DEFAULT 0")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                db.execSQL("DROP TABLE IF EXISTS $TABLE_NOTES")
+                onCreate(db)
+            }
+        } else {
+            db.execSQL("DROP TABLE IF EXISTS $TABLE_NOTES")
+            onCreate(db)
+        }
     }
 
     fun getAllNotes(): List<AppNote> {
@@ -74,6 +86,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             val pinnedIdx = c.getColumnIndexOrThrow(COLUMN_IS_PINNED)
             val syncedIdx = c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)
             val opIdx = c.getColumnIndexOrThrow(COLUMN_PENDING_OP)
+            val updateAvailableIdx = c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)
 
             while (c.moveToNext()) {
                 val tagsStr = c.getString(tagsIdx).orEmpty()
@@ -90,7 +103,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                         isLocked = c.getInt(lockedIdx) == 1,
                         isPinned = c.getInt(pinnedIdx) == 1,
                         isSynced = c.getInt(syncedIdx) == 1,
-                        pendingOp = c.getString(opIdx).orEmpty()
+                        pendingOp = c.getString(opIdx).orEmpty(),
+                        updateAvailable = c.getInt(updateAvailableIdx) == 1
                     )
                 )
             }
@@ -122,7 +136,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                     isLocked = c.getInt(c.getColumnIndexOrThrow(COLUMN_IS_LOCKED)) == 1,
                     isPinned = c.getInt(c.getColumnIndexOrThrow(COLUMN_IS_PINNED)) == 1,
                     isSynced = c.getInt(c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)) == 1,
-                    pendingOp = c.getString(c.getColumnIndexOrThrow(COLUMN_PENDING_OP)).orEmpty()
+                    pendingOp = c.getString(c.getColumnIndexOrThrow(COLUMN_PENDING_OP)).orEmpty(),
+                    updateAvailable = c.getInt(c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)) == 1
                 )
             }
         }
@@ -150,6 +165,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             val pinnedIdx = c.getColumnIndexOrThrow(COLUMN_IS_PINNED)
             val syncedIdx = c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)
             val opIdx = c.getColumnIndexOrThrow(COLUMN_PENDING_OP)
+            val updateAvailableIdx = c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)
 
             while (c.moveToNext()) {
                 val tagsStr = c.getString(tagsIdx).orEmpty()
@@ -166,7 +182,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                         isLocked = c.getInt(lockedIdx) == 1,
                         isPinned = c.getInt(pinnedIdx) == 1,
                         isSynced = c.getInt(syncedIdx) == 1,
-                        pendingOp = c.getString(opIdx).orEmpty()
+                        pendingOp = c.getString(opIdx).orEmpty(),
+                        updateAvailable = c.getInt(updateAvailableIdx) == 1
                     )
                 )
             }
@@ -187,6 +204,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(COLUMN_IS_PINNED, if (note.isPinned) 1 else 0)
             put(COLUMN_IS_SYNCED, if (isSynced) 1 else 0)
             put(COLUMN_PENDING_OP, pendingOp)
+            put(COLUMN_UPDATE_AVAILABLE, if (note.updateAvailable) 1 else 0)
         }
         db.replace(TABLE_NOTES, null, values)
     }

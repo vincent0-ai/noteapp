@@ -339,6 +339,33 @@ class NotesRepository {
         }
     }
 
+    suspend fun syncNoteWithOriginal(noteId: String): Result<com.example.echowithin.data.model.SyncNoteResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = api.syncNote(noteId)
+            if (response.success) {
+                if (response.content != null && !response.pending_approval) {
+                    val local = dbHelper.getNoteById(noteId)
+                    if (local != null) {
+                        val titleCandidate = response.content.lineSequence().firstOrNull()?.trim().orEmpty()
+                        val title = if (titleCandidate.isBlank()) "Untitled" else titleCandidate.take(60)
+                        
+                        dbHelper.saveNote(
+                            local.copy(
+                                content = response.content,
+                                title = title,
+                                updateAvailable = false,
+                                isSynced = true
+                            )
+                        )
+                    }
+                }
+            } else {
+                throw Exception(response.error ?: response.message ?: "Sync failed")
+            }
+            response
+        }
+    }
+
     fun clearLocalData() {
         dbHelper.clearAll()
     }
@@ -356,7 +383,8 @@ class NotesRepository {
             isLocked = is_locked,
             isPinned = is_pinned,
             isSynced = isSynced,
-            pendingOp = pendingOp
+            pendingOp = pendingOp,
+            updateAvailable = update_available
         )
     }
 }
