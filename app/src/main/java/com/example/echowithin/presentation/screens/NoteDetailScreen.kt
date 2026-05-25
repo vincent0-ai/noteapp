@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -46,6 +47,11 @@ fun NoteDetailScreen(
     onVersions: () -> Unit,
     onDelete: () -> Unit,
     onToggleLock: ((Boolean) -> Unit) -> Unit,
+    // Lock integration
+    isLocked: Boolean,
+    lockError: String?,
+    lockLoading: Boolean,
+    onVerifyPin: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -101,7 +107,89 @@ fun NoteDetailScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        if (isLoading) {
+        if (noteState?.isLocked == true && isLocked) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                var pin by remember { mutableStateOf("") }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = ErrorRed.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, ErrorRed),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(32.dp))
+                        }
+                    }
+                    Text(
+                        text = "Locked Note",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandOrange
+                    )
+                    Text(
+                        text = "Enter your PIN to view this protected note.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = {
+                                if (pin.length == 4) {
+                                    onVerifyPin(pin)
+                                }
+                            }
+                        ),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.width(180.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            textAlign = TextAlign.Center,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 8.sp
+                        ),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BrandOrange,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                    if (lockError != null) {
+                        Text(
+                            text = lockError,
+                            color = ErrorRed,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Button(
+                        onClick = { if (pin.length == 4) onVerifyPin(pin) },
+                        enabled = pin.length == 4 && !lockLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                    ) {
+                        if (lockLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                        } else {
+                            Text("Unlock", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        } else if (isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

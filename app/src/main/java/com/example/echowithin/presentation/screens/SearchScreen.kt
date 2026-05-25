@@ -22,6 +22,7 @@ import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.viewmodel.NotesViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Lock
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 
@@ -29,6 +30,7 @@ import com.example.echowithin.ui.theme.BrandAmber
 @Composable
 fun SearchScreen(
     viewModel: NotesViewModel,
+    isLocked: Boolean,
     onNoteClick: (String) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
@@ -96,6 +98,10 @@ fun SearchScreen(
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
                     items(results) { hit ->
+                        val note = viewModel.getNoteById(hit.id)
+                        val isNoteLocked = note?.isLocked == true
+                        val hideContent = isNoteLocked && isLocked
+
                         Card(
                             onClick = { onNoteClick(hit.id) },
                             modifier = Modifier.fillMaxWidth(),
@@ -107,13 +113,39 @@ fun SearchScreen(
                                 modifier = Modifier.padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = parseSearchSnippet(hit.snippet.orEmpty(), BrandOrange),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 3,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                if (hideContent) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "Locked Note",
+                                            tint = BrandAmber,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Text(
+                                            text = "Locked Note",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = BrandAmber
+                                        )
+                                    }
+                                    Text(
+                                        text = "🔒 Content is hidden. Verify PIN under the Locked tab to view.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    Text(
+                                        text = parseSearchSnippet(hit.snippet.orEmpty(), BrandOrange),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 3,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                                 
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),

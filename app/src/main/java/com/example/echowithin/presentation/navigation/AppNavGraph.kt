@@ -289,7 +289,11 @@ fun AppNavGraph(
                             navController.popBackStack()
                         }
                     }
-                }
+                },
+                isLocked = appLockViewModel.uiState.isLocked,
+                lockError = appLockViewModel.uiState.error,
+                lockLoading = appLockViewModel.uiState.isLoading,
+                onVerifyPin = { appLockViewModel.verify(it) }
             )
         }
 
@@ -315,7 +319,11 @@ fun AppNavGraph(
                     notesViewModel.toggleNoteLock(noteId) { newLocked ->
                         onDone(newLocked)
                     }
-                }
+                },
+                isLocked = appLockViewModel.uiState.isLocked,
+                lockError = appLockViewModel.uiState.error,
+                lockLoading = appLockViewModel.uiState.isLoading,
+                onVerifyPin = { appLockViewModel.verify(it) }
             )
         }
 
@@ -366,6 +374,7 @@ fun AppNavGraph(
         composable(AppRoute.Search) {
             SearchScreen(
                 viewModel = notesViewModel,
+                isLocked = appLockViewModel.uiState.isLocked,
                 onNoteClick = { noteId -> navController.navigate(AppRoute.detail(noteId)) }
             )
         }

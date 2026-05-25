@@ -990,6 +990,7 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
         val lines = strippedContent.lineSequence().toList()
         if (lines.size <= 1) strippedContent else lines.drop(1).joinToString(" ").trim()
     }
+    val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -1108,7 +1109,7 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
                 Text(
-                    text = formatRelativeTime(note.updatedAt),
+                    text = relativeTime,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
@@ -1119,22 +1120,25 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
 
 // ── Utilities ───────────────────────────────────────────────
 
+private val otaFormats = listOf(
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
+    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
+    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US),
+    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+)
+private val otaDisplayFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
+
 private fun formatRelativeTime(timestamp: String): String {
     if (timestamp.isBlank()) return ""
     try {
-        val formats = listOf(
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
-            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
-            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US),
-            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-        )
-        
         var date: java.util.Date? = null
-        for (format in formats) {
-            try {
-                date = format.parse(timestamp)
-                if (date != null) break
-            } catch (_: Exception) {}
+        synchronized(otaFormats) {
+            for (format in otaFormats) {
+                try {
+                    date = format.parse(timestamp)
+                    if (date != null) break
+                } catch (_: Exception) {}
+            }
         }
         
         if (date == null) {
@@ -1156,8 +1160,9 @@ private fun formatRelativeTime(timestamp: String): String {
             diffDay == 1L -> "Yesterday"
             diffDay < 7L -> "${diffDay}d ago"
             else -> {
-                val displayFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
-                displayFormat.format(date)
+                synchronized(otaDisplayFormat) {
+                    otaDisplayFormat.format(date)
+                }
             }
         }
     } catch (e: Exception) {

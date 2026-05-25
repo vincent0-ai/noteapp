@@ -23,12 +23,16 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.BrandOrange
+import com.example.echowithin.ui.theme.ErrorRed
+import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.Lock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +42,11 @@ fun NoteEditorScreen(
     isSaving: Boolean,
     onBack: () -> Unit,
     onSave: (content: String, reference: String, tags: List<String>) -> Unit,
+    // Lock integration
+    isLocked: Boolean,
+    lockError: String?,
+    lockLoading: Boolean,
+    onVerifyPin: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var content by remember { mutableStateOf(initialNote?.content.orEmpty()) }
@@ -87,42 +96,126 @@ fun NoteEditorScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            // Tab Row
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = BrandOrange
+        if (initialNote?.isLocked == true && isLocked) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(innerPadding).padding(32.dp),
+                contentAlignment = Alignment.Center
             ) {
-                tabTitles.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = {
-                            Text(
-                                text = title,
-                                color = if (selectedTab == index) BrandOrange
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                            )
+                var pin by remember { mutableStateOf("") }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = ErrorRed.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, ErrorRed),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(32.dp))
                         }
+                    }
+                    Text(
+                        text = "Locked Note",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = BrandOrange
                     )
+                    Text(
+                        text = "Enter your PIN to edit this protected note.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                            imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                        ),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                            onDone = {
+                                if (pin.length == 4) {
+                                    onVerifyPin(pin)
+                                }
+                            }
+                        ),
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        modifier = Modifier.width(180.dp),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            textAlign = TextAlign.Center,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 8.sp
+                        ),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BrandOrange,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+                    if (lockError != null) {
+                        Text(
+                            text = lockError,
+                            color = ErrorRed,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Button(
+                        onClick = { if (pin.length == 4) onVerifyPin(pin) },
+                        enabled = pin.length == 4 && !lockLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
+                    ) {
+                        if (lockLoading) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(20.dp))
+                        } else {
+                            Text("Unlock", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
             }
+        } else {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .padding(innerPadding)
+            ) {
+                // Tab Row
+                TabRow(
+                    selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.background,
+                    contentColor = BrandOrange
+                ) {
+                    tabTitles.forEachIndexed { index, title ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    text = title,
+                                    color = if (selectedTab == index) BrandOrange
+                                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        )
+                    }
+                }
 
-            when (selectedTab) {
-                0 -> WriteTab(
-                    content = content,
-                    onContentChange = { content = it },
-                    reference = reference,
-                    onReferenceChange = { reference = it },
-                    tags = tags,
-                    onTagsChange = { tags = it }
-                )
-                1 -> PreviewTab(content = content)
+                when (selectedTab) {
+                    0 -> WriteTab(
+                        content = content,
+                        onContentChange = { content = it },
+                        reference = reference,
+                        onReferenceChange = { reference = it },
+                        tags = tags,
+                        onTagsChange = { tags = it }
+                    )
+                    1 -> PreviewTab(content = content)
+                }
             }
         }
     }

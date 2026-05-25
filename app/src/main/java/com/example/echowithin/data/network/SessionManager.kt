@@ -54,7 +54,20 @@ object SessionManager {
             prefs?.edit()?.putInt(KEY_TRIAL_DAYS_REMAINING, value)?.apply()
         }
 
+    private const val KEY_LOCAL_PIN_HASH = "local_pin_hash"
+    private const val KEY_LOCAL_HAS_PIN = "local_has_pin"
 
+    var localPinHash: String?
+        get() = prefs?.getString(KEY_LOCAL_PIN_HASH, null)
+        set(value) {
+            prefs?.edit()?.putString(KEY_LOCAL_PIN_HASH, value)?.apply()
+        }
+
+    var localHasPin: Boolean
+        get() = prefs?.getBoolean(KEY_LOCAL_HAS_PIN, false) ?: false
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_LOCAL_HAS_PIN, value)?.apply()
+        }
 
     fun clear() {
         prefs?.edit()?.clear()?.apply()
