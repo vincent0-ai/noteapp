@@ -365,7 +365,9 @@ fun AppNavGraph(
         }
 
         composable(AppRoute.Premium) {
-            PremiumScreen()
+            PremiumScreen(
+                onLoginClick = { navController.navigate(AppRoute.Login) }
+            )
         }
 
         composable(AppRoute.Settings) {

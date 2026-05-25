@@ -23,7 +23,11 @@ object ApiClient {
 
     val isHandlingUnauthorized = AtomicBoolean(false)
 
-    private val persistentCookieJar = object : CookieJar {
+    private interface ClearableCookieJar : CookieJar {
+        fun clear()
+    }
+
+    private val persistentCookieJar = object : ClearableCookieJar {
         private val prefs = EchoWithinApplication.instance.getSharedPreferences("cookies_pref", Context.MODE_PRIVATE)
         private val cookieStore = mutableMapOf<String, MutableList<Cookie>>()
         private val lock = Any()
@@ -98,6 +102,15 @@ object ApiClient {
                 null
             }
         }
+
+        override fun clear() = synchronized(lock) {
+            cookieStore.clear()
+            prefs.edit().clear().apply()
+        }
+    }
+
+    fun clearCookies() {
+        persistentCookieJar.clear()
     }
 
     fun registerFcmToken(context: Context) {

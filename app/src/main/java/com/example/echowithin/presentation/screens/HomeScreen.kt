@@ -28,6 +28,13 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.ErrorRed
@@ -217,21 +224,18 @@ private fun NotesTabContent(
 ) {
     when {
         isLoading && notes.isEmpty() -> {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    CircularProgressIndicator(color = BrandOrange)
-                    Text(
-                        text = "Syncing your thoughts...",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            val brush = shimmerBrush()
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+            ) {
+                items(4) {
+                    NoteCardPlaceholder(brush = brush)
                 }
             }
         }
-        error != null -> {
+        error != null && notes.isEmpty() -> {
             Box(
                 modifier = Modifier.fillMaxSize().padding(24.dp),
                 contentAlignment = Alignment.Center
@@ -283,7 +287,7 @@ private fun NotesTabContent(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
-                items(notes) { note ->
+                items(notes, key = { it.id }) { note ->
                     NoteCard(note = note, onClick = { onNoteClick(note.id) })
                 }
             }
@@ -467,7 +471,7 @@ private fun LockedTabContent(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
-                items(lockedNotes) { note ->
+                items(lockedNotes, key = { it.id }) { note ->
                     NoteCard(note = note, onClick = { onNoteClick(note.id) })
                 }
             }
@@ -972,8 +976,33 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
         if (lines.size <= 1) strippedContent else lines.drop(1).joinToString(" ").trim()
     }
 
+    var isPressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.96f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "clickScale"
+    )
+
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer(scaleX = scale, scaleY = scale)
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onPress = {
+                        isPressed = true
+                        try {
+                            awaitRelease()
+                        } finally {
+                            isPressed = false
+                        }
+                    },
+                    onTap = { onClick() }
+                )
+            },
         shape = RoundedCornerShape(16.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -1030,16 +1059,18 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
                     modifier = Modifier.padding(top = 4.dp)
                 ) {
                     note.tags.forEach { tag ->
-                        SuggestionChip(
-                            onClick = {},
-                            label = { Text("#$tag", style = MaterialTheme.typography.bodySmall) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                labelColor = BrandAmber,
-                                containerColor = BrandOrange.copy(alpha = 0.08f)
-                            ),
-                            border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.2f)),
-                            shape = RoundedCornerShape(8.dp)
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = BrandOrange.copy(alpha = 0.08f),
+                            border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.2f))
+                        ) {
+                            Text(
+                                text = "#$tag",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BrandAmber,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1062,7 +1093,7 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
                 Text(
-                    text = note.updatedAt.take(10),
+                    text = formatRelativeTime(note.updatedAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
@@ -1072,6 +1103,52 @@ fun NoteCard(note: AppNote, onClick: () -> Unit) {
 }
 
 // ── Utilities ───────────────────────────────────────────────
+
+private fun formatRelativeTime(timestamp: String): String {
+    if (timestamp.isBlank()) return ""
+    try {
+        val formats = listOf(
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
+            java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
+            java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US),
+            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        )
+        
+        var date: java.util.Date? = null
+        for (format in formats) {
+            try {
+                date = format.parse(timestamp)
+                if (date != null) break
+            } catch (_: Exception) {}
+        }
+        
+        if (date == null) {
+            if (timestamp.length >= 10) return timestamp.take(10)
+            return timestamp
+        }
+        
+        val diffMs = System.currentTimeMillis() - date.time
+        val diffSec = diffMs / 1000
+        val diffMin = diffSec / 60
+        val diffHour = diffMin / 60
+        val diffDay = diffHour / 24
+        
+        return when {
+            diffMs < 0 -> "Just now"
+            diffSec < 60 -> "Just now"
+            diffMin < 60 -> "${diffMin}m ago"
+            diffHour < 24 -> "${diffHour}h ago"
+            diffDay == 1L -> "Yesterday"
+            diffDay < 7L -> "${diffDay}d ago"
+            else -> {
+                val displayFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
+                displayFormat.format(date)
+            }
+        }
+    } catch (e: Exception) {
+        return timestamp.take(10)
+    }
+}
 
 private fun stripMarkdown(text: String): String {
     var clean = text
@@ -1083,4 +1160,91 @@ private fun stripMarkdown(text: String): String {
     clean = clean.replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
     clean = clean.replace(Regex("!\\[(.*?)\\]\\(.*?\\)"), "$1")
     return clean
+}
+
+@Composable
+private fun shimmerBrush(showShimmer: Boolean = true, targetValue: Float = 1000f): Brush {
+    return if (showShimmer) {
+        val shimmerColors = listOf(
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        )
+
+        val transition = rememberInfiniteTransition(label = "shimmer")
+        val translateAnim = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = targetValue,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = 1000,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmerTranslate"
+        )
+
+        Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset.Zero,
+            end = Offset(x = translateAnim.value, y = translateAnim.value)
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(Color.Transparent, Color.Transparent),
+            start = Offset.Zero,
+            end = Offset.Zero
+        )
+    }
+}
+
+@Composable
+private fun NoteCardPlaceholder(brush: Brush) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.45f)
+                    .height(20.dp)
+                    .background(brush, shape = RoundedCornerShape(4.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(14.dp)
+                    .background(brush, shape = RoundedCornerShape(4.dp))
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .height(14.dp)
+                    .background(brush, shape = RoundedCornerShape(4.dp))
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 4.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(width = 64.dp, height = 18.dp)
+                        .background(brush, shape = RoundedCornerShape(6.dp))
+                )
+                Box(
+                    modifier = Modifier
+                        .size(width = 80.dp, height = 18.dp)
+                        .background(brush, shape = RoundedCornerShape(6.dp))
+                )
+            }
+        }
+    }
 }

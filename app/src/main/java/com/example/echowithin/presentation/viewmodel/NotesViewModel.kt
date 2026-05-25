@@ -63,7 +63,12 @@ class NotesViewModel(
 
 
     fun loadNotes() {
-        uiState = uiState.copy(isLoading = true, error = null)
+        val localNotes = repository.getLocalNotes()
+        if (localNotes.isNotEmpty()) {
+            uiState = uiState.copy(notes = localNotes, isLoading = false, error = null)
+        } else {
+            uiState = uiState.copy(isLoading = true, error = null)
+        }
         viewModelScope.launch {
             repository.getNotes()
                 .onSuccess { notes ->
@@ -73,24 +78,37 @@ class NotesViewModel(
                     loadNotifications()
                 }
                 .onFailure {
-                    uiState = uiState.copy(isLoading = false, error = it.message ?: "Failed to load notes")
+                    uiState = uiState.copy(isLoading = false)
+                    if (uiState.notes.isEmpty()) {
+                        uiState = uiState.copy(error = it.message ?: "Failed to load notes")
+                    }
                 }
         }
     }
 
     fun loadProposals() {
+        val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
+        if (!hasToken) {
+            uiState = uiState.copy(proposals = emptyList())
+            return
+        }
         uiState = uiState.copy(proposalsLoading = true)
         viewModelScope.launch {
             try {
                 val response = com.example.echowithin.data.network.ApiClient.apiService.getProposals()
                 uiState = uiState.copy(proposalsLoading = false, proposals = response.proposals)
             } catch (e: Exception) {
-                uiState = uiState.copy(proposalsLoading = false, error = e.message ?: "Failed to load proposals")
+                uiState = uiState.copy(proposalsLoading = false)
             }
         }
     }
 
     fun loadActiveShares() {
+        val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
+        if (!hasToken) {
+            uiState = uiState.copy(activeShares = emptyList())
+            return
+        }
         uiState = uiState.copy(sharesLoading = true)
         viewModelScope.launch {
             try {
@@ -107,12 +125,21 @@ class NotesViewModel(
                 val result = awaitAll(*deferreds.toTypedArray()).filterNotNull()
                 uiState = uiState.copy(sharesLoading = false, activeShares = result)
             } catch (e: Exception) {
-                uiState = uiState.copy(sharesLoading = false, error = e.message ?: "Failed to load active shares")
+                uiState = uiState.copy(sharesLoading = false)
             }
         }
     }
 
     fun loadNotifications() {
+        val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
+        if (!hasToken) {
+            uiState = uiState.copy(
+                notifications = emptyList(),
+                unreadNotificationsCount = 0,
+                badgeCounts = com.example.echowithin.data.model.BadgeCountsDto(0, 0)
+            )
+            return
+        }
         viewModelScope.launch {
             try {
                 val notificationsResp = com.example.echowithin.data.network.ApiClient.apiService.getNotifications()

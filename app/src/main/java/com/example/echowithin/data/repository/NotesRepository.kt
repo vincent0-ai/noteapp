@@ -5,6 +5,7 @@ import com.example.echowithin.data.local.NoteDatabaseHelper
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.data.model.CreateNoteRequest
 import com.example.echowithin.data.model.NoteDto
+import com.example.echowithin.data.model.SearchHitDto
 import com.example.echowithin.data.model.SearchResultsDto
 import com.example.echowithin.data.network.ApiClient
 import com.example.echowithin.data.network.SessionManager
@@ -46,83 +47,101 @@ class NotesRepository {
 
     private suspend fun syncNotesInternal() {
         val isFree = SessionManager.accountTier == "free"
+        val maxNoteSize = if (isFree) 20000 else 100000
+        val maxServerNotes = 50
 
-        // 1. Push pending local changes to the server (only if NOT free tier)
-        if (!isFree) {
-            val pending = dbHelper.getPendingNotes()
-            for (note in pending) {
-                try {
-                    val op = if (note.pendingOp == "none" || note.pendingOp.isBlank()) "create" else note.pendingOp
-                    when (op) {
-                        "create" -> {
-                            val response = api.createNote(
-                                CreateNoteRequest(
-                                    content = note.content,
-                                    reference = note.reference,
-                                    tags = note.tags
-                                )
-                            )
-                            if (response.success && !response.id.isNullOrBlank()) {
-                                // Delete local temp note and save new synced note
-                                dbHelper.deletePhysically(note.id)
-                                dbHelper.saveNote(note.copy(id = response.id, isSynced = true, pendingOp = "none"))
-                            }
-                        }
-                        "edit" -> {
-                            val response = api.editNote(
-                                noteId = note.id,
-                                body = CreateNoteRequest(
-                                    content = note.content,
-                                    reference = note.reference,
-                                    tags = note.tags
-                                )
-                            )
-                            if (response.success) {
-                                dbHelper.saveNote(note.copy(isSynced = true, pendingOp = "none"))
-                            }
-                        }
-                        "delete" -> {
-                            try {
-                                val response = api.deleteNote(note.id)
-                                if (response.success || response.error?.contains("not found", ignoreCase = true) == true) {
-                                    dbHelper.deletePhysically(note.id)
-                                }
-                            } catch (e: retrofit2.HttpException) {
-                                if (e.code() == 404) {
-                                    dbHelper.deletePhysically(note.id)
-                                } else {
-                                    throw e
-                                }
-                            }
+        // 1. Fetch current server notes to determine server count
+        val initialResponse = try {
+            api.getNotes(page = 1, perPage = 100)
+        } catch (_: Exception) {
+            null
+        }
+        var serverCount = initialResponse?.notes?.size ?: 0
+
+        // 2. Push pending local changes to the server
+        val pending = dbHelper.getPendingNotes()
+        for (note in pending) {
+            // Check character size limits
+            if (note.content.length > maxNoteSize) {
+                continue
+            }
+
+            val op = if (note.pendingOp == "none" || note.pendingOp.isBlank()) "create" else note.pendingOp
+
+            // Check total server note count limit for Free users
+            if (op == "create" && isFree && serverCount >= maxServerNotes) {
+                continue
+            }
+
+            try {
+                when (op) {
+                    "create" -> {
+                        val response = api.createNote(
+                            CreateNoteRequest(
+                                content = note.content,
+                                reference = note.reference,
+                                tags = note.tags
+                             )
+                        )
+                        if (response.success && !response.id.isNullOrBlank()) {
+                            dbHelper.deletePhysically(note.id)
+                            dbHelper.saveNote(note.copy(id = response.id, isSynced = true, pendingOp = "none"))
+                            serverCount++
                         }
                     }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    // Stop syncing remaining items if network error occurs to preserve ordering
-                    break
+                    "edit" -> {
+                        val response = api.editNote(
+                            noteId = note.id,
+                            body = CreateNoteRequest(
+                                content = note.content,
+                                reference = note.reference,
+                                tags = note.tags
+                            )
+                        )
+                        if (response.success) {
+                            dbHelper.saveNote(note.copy(isSynced = true, pendingOp = "none"))
+                        }
+                    }
+                    "delete" -> {
+                        try {
+                            val response = api.deleteNote(note.id)
+                            if (response.success || response.error?.contains("not found", ignoreCase = true) == true) {
+                                dbHelper.deletePhysically(note.id)
+                                serverCount--
+                            }
+                        } catch (e: retrofit2.HttpException) {
+                            if (e.code() == 404) {
+                                dbHelper.deletePhysically(note.id)
+                                serverCount--
+                            } else {
+                                throw e
+                             }
+                        }
+                    }
                 }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Stop syncing remaining items if network error occurs to preserve ordering
+                break
             }
         }
 
-        // 2. Pull latest notes list from server
+        // 3. Pull latest notes list from server
         val response = api.getNotes(page = 1, perPage = 100)
         val serverNotes = response.notes.map { it.toAppNote() }
         val serverIds = serverNotes.map { it.id }.toSet()
 
-        // 3. Reconcile server notes with local notes
+        // 4. Reconcile server notes with local notes
         for (serverNote in serverNotes) {
             val local = dbHelper.getNoteById(serverNote.id)
             if (local == null) {
-                // Not in database, insert
                 dbHelper.saveNote(serverNote)
             } else if (local.isSynced) {
-                // Local is synced, overwrite with server's latest
                 dbHelper.saveNote(serverNote)
             }
-            // If local is modified but not synced, keep local version
         }
 
-        // 4. Remove local notes that were deleted on the server and are already synced
+        // 5. Remove local notes that were deleted on the server and are already synced
         val localNotes = dbHelper.getAllNotes()
         for (localNote in localNotes) {
             if (!localNote.id.startsWith("local_") && !serverIds.contains(localNote.id) && localNote.isSynced) {
@@ -222,8 +241,73 @@ class NotesRepository {
         }
     }
 
-    suspend fun searchNotes(query: String): Result<SearchResultsDto> = runCatching {
-        api.searchPersonalNotes(query)
+    fun getLocalNotes(): List<AppNote> {
+        return dbHelper.getAllNotes()
+    }
+
+    suspend fun searchNotes(query: String): Result<SearchResultsDto> = withContext(Dispatchers.IO) {
+        runCatching {
+            try {
+                api.searchPersonalNotes(query)
+            } catch (e: Exception) {
+                // API is down or user is offline/unauthenticated — fallback to offline search
+                val localNotes = dbHelper.getAllNotes()
+                val filteredNotes = localNotes.filter { note ->
+                    note.content.contains(query, ignoreCase = true) ||
+                    note.reference.contains(query, ignoreCase = true) ||
+                    note.tags.any { it.contains(query, ignoreCase = true) }
+                }
+                
+                val hits = filteredNotes.map { note ->
+                    val snippet = highlightText(note.content, query)
+                    SearchHitDto(
+                        id = note.id,
+                        content_highlighted = snippet,
+                        snippet = snippet,
+                        created_at = note.updatedAt
+                    )
+                }
+                
+                SearchResultsDto(
+                    results = hits,
+                    total = hits.size,
+                    query = query
+                )
+            }
+        }
+    }
+
+    private fun highlightText(content: String, query: String): String {
+        if (query.isBlank()) return content
+        val queryLower = query.lowercase()
+        val contentLower = content.lowercase()
+        val index = contentLower.indexOf(queryLower)
+        if (index == -1) {
+            return content.take(150)
+        }
+        
+        val start = (index - 60).coerceAtLeast(0)
+        val end = (index + query.length + 90).coerceAtMost(content.length)
+        val rawSnippet = content.substring(start, end)
+        
+        val snippetLower = rawSnippet.lowercase()
+        var matchIndex = snippetLower.indexOf(queryLower)
+        val sb = StringBuilder()
+        var current = 0
+        while (matchIndex != -1) {
+            sb.append(rawSnippet.substring(current, matchIndex))
+            sb.append("<mark class=\"search-highlight\">")
+            sb.append(rawSnippet.substring(matchIndex, matchIndex + query.length))
+            sb.append("</mark>")
+            current = matchIndex + query.length
+            matchIndex = snippetLower.indexOf(queryLower, current)
+        }
+        sb.append(rawSnippet.substring(current))
+        
+        var result = sb.toString()
+        if (start > 0) result = "...$result"
+        if (end < content.length) result = "$result..."
+        return result
     }
 
     suspend fun getNoteById(noteId: String): Result<AppNote> = withContext(Dispatchers.IO) {

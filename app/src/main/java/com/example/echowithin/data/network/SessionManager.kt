@@ -58,6 +58,9 @@ object SessionManager {
 
     fun clear() {
         prefs?.edit()?.clear()?.apply()
+        try {
+            ApiClient.clearCookies()
+        } catch (_: Exception) {}
     }
 }
 

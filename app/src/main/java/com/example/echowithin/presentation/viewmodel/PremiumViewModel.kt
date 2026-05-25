@@ -24,19 +24,23 @@ class PremiumViewModel : ViewModel() {
         private set
 
     init {
+        val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
         uiState = uiState.copy(
-            isPremium = SessionManager.accountTier == "premium",
-            isTrial = SessionManager.isTrial,
-            trialDaysRemaining = SessionManager.trialDaysRemaining
+            isPremium = hasToken && SessionManager.accountTier == "premium",
+            isTrial = hasToken && SessionManager.isTrial,
+            trialDaysRemaining = if (hasToken) SessionManager.trialDaysRemaining else 0
         )
     }
 
     fun refreshPremiumStatus() {
+        val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
         uiState = uiState.copy(
-            isPremium = SessionManager.accountTier == "premium",
-            isTrial = SessionManager.isTrial,
-            trialDaysRemaining = SessionManager.trialDaysRemaining
+            isPremium = hasToken && SessionManager.accountTier == "premium",
+            isTrial = hasToken && SessionManager.isTrial,
+            trialDaysRemaining = if (hasToken) SessionManager.trialDaysRemaining else 0
         )
+        if (!hasToken) return
+
         viewModelScope.launch {
             try {
                 val profile = ApiClient.apiService.getProfile()

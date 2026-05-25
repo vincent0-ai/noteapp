@@ -30,6 +30,7 @@ import com.example.echowithin.data.network.SessionManager
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PremiumScreen(
+    onLoginClick: () -> Unit,
     viewModel: PremiumViewModel = viewModel(factory = PremiumViewModel.factory()),
     modifier: Modifier = Modifier
 ) {
@@ -194,60 +195,171 @@ fun PremiumScreen(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                     
-                    Row(modifier = Modifier.fillMaxWidth()) {
-                        Text("", modifier = Modifier.weight(1.2f), fontWeight = FontWeight.Bold)
-                        Text("Free / Guest", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text("Premium", modifier = Modifier.weight(1f), fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, color = BrandOrange)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("", modifier = Modifier.weight(1.2f))
+                        Text(
+                            text = "Guest\n(Offline)",
+                            modifier = Modifier.weight(0.9f),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "Free\n(Cloud)",
+                            modifier = Modifier.weight(0.9f),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "Premium\n(Full)",
+                            modifier = Modifier.weight(1.0f),
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = BrandOrange,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                     
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f))
                     
-                    PlanComparisonRow(feature = "Local Notes Count", free = "Unlimited", premium = "Unlimited")
-                    PlanComparisonRow(feature = "Local Note Size", free = "Unlimited", premium = "Unlimited")
-                    PlanComparisonRow(feature = "Cloud Backup Limit", free = "No Backup (Offline)", premium = "Unlimited (Backed Up)")
-                    PlanComparisonRow(feature = "Sync Note Size", free = "No Sync (Offline)", premium = "Up to 100k chars")
-                    PlanComparisonRow(feature = "Share Links", free = "Up to 3 links", premium = "Unlimited links")
-                    PlanComparisonRow(feature = "Note Locking", free = "No lock", premium = "Secure PIN lock")
-                    PlanComparisonRow(feature = "Media Attachments", free = "No media", premium = "Up to 20 media")
+                    PlanComparisonRow(
+                        feature = "Local Notes",
+                        guest = "Unlimited",
+                        free = "Unlimited",
+                        premium = "Unlimited"
+                    )
+                    PlanComparisonRow(
+                        feature = "Local Size",
+                        guest = "Unlimited",
+                        free = "Unlimited",
+                        premium = "Unlimited"
+                    )
+                    PlanComparisonRow(
+                        feature = "Cloud Backup",
+                        guest = "No Sync",
+                        free = "Up to 50 notes",
+                        premium = "Unlimited"
+                    )
+                    PlanComparisonRow(
+                        feature = "Sync Note Size",
+                        guest = "No Sync",
+                        free = "Up to 20k chars",
+                        premium = "Up to 100k chars"
+                    )
+                    PlanComparisonRow(
+                        feature = "Share Links",
+                        guest = "No shares",
+                        free = "Up to 3 links",
+                        premium = "Unlimited links"
+                    )
+                    PlanComparisonRow(
+                        feature = "Note Locking",
+                        guest = "No",
+                        free = "No",
+                        premium = "Secure PIN"
+                    )
+                    PlanComparisonRow(
+                        feature = "Attachments",
+                        guest = "No",
+                        free = "No",
+                        premium = "Up to 20 files"
+                    )
                 }
             }
 
             if (!uiState.isPremium || uiState.isTrial) {
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Start upgrade button
-                Button(
-                    onClick = {
-                        try {
-                            val username = SessionManager.username ?: ""
-                            val upgradeUrl = if (username.isNotBlank()) {
-                                "https://echowithin.xyz/profile/$username/settings"
-                            } else {
-                                "https://echowithin.xyz/profile_settings"
-                            }
-                            val intent = android.content.Intent(
-                                android.content.Intent.ACTION_VIEW,
-                                android.net.Uri.parse(upgradeUrl)
-                            ).apply {
-                                addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            context.startActivity(intent)
-                        } catch (_: Exception) {}
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(52.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BrandOrange,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(
-                        text = "Upgrade via Website (KSh 50/mo)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                val isGuest = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
+                if (isGuest) {
+                    Button(
+                        onClick = onLoginClick,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BrandOrange,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Sign In / Create Account",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://echowithin.xyz/profile_settings")
+                                ).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, BrandOrange),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = BrandOrange
+                        )
+                    ) {
+                        Text(
+                            text = "Upgrade via Website (KSh 50/mo)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    // Start upgrade button
+                    Button(
+                        onClick = {
+                            try {
+                                val username = SessionManager.username ?: ""
+                                val upgradeUrl = if (username.isNotBlank()) {
+                                    "https://echowithin.xyz/profile/$username/settings"
+                                } else {
+                                    "https://echowithin.xyz/profile_settings"
+                                }
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(upgradeUrl)
+                                ).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            } catch (_: Exception) {}
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BrandOrange,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Upgrade via Website (KSh 50/mo)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
                 Text(
@@ -263,7 +375,7 @@ fun PremiumScreen(
 }
 
 @Composable
-fun PlanComparisonRow(feature: String, free: String, premium: String) {
+fun PlanComparisonRow(feature: String, guest: String, free: String, premium: String) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -271,20 +383,27 @@ fun PlanComparisonRow(feature: String, free: String, premium: String) {
         Text(
             text = feature,
             modifier = Modifier.weight(1.2f),
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Medium
         )
         Text(
+            text = guest,
+            modifier = Modifier.weight(0.9f),
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
             text = free,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(0.9f),
+            style = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = premium,
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1.0f),
+            style = MaterialTheme.typography.bodySmall,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
             color = BrandOrange
