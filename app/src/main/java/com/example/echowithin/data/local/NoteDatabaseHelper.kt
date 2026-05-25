@@ -10,7 +10,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
 
         const val TABLE_NOTES = "notes"
         const val COLUMN_ID = "id"
@@ -26,6 +26,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         const val COLUMN_IS_SYNCED = "is_synced"
         const val COLUMN_PENDING_OP = "pending_op" // "none", "create", "edit", "delete"
         const val COLUMN_UPDATE_AVAILABLE = "update_available"
+        const val COLUMN_SOURCE_NOTE_ID = "source_note_id"
+        const val COLUMN_SOURCE_SHARE_ID = "source_share_id"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -41,22 +43,28 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $COLUMN_IS_PINNED INTEGER DEFAULT 0,
                 $COLUMN_IS_SYNCED INTEGER DEFAULT 1,
                 $COLUMN_PENDING_OP TEXT DEFAULT 'none',
-                $COLUMN_UPDATE_AVAILABLE INTEGER DEFAULT 0
+                $COLUMN_UPDATE_AVAILABLE INTEGER DEFAULT 0,
+                $COLUMN_SOURCE_NOTE_ID TEXT,
+                $COLUMN_SOURCE_SHARE_ID TEXT
             )
         """.trimIndent()
         db.execSQL(createTable)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion < 2) {
-            try {
+        var currentVersion = oldVersion
+        try {
+            if (currentVersion < 2) {
                 db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_UPDATE_AVAILABLE INTEGER DEFAULT 0")
-            } catch (e: Exception) {
-                e.printStackTrace()
-                db.execSQL("DROP TABLE IF EXISTS $TABLE_NOTES")
-                onCreate(db)
+                currentVersion = 2
             }
-        } else {
+            if (currentVersion < 3) {
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_SOURCE_NOTE_ID TEXT")
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_SOURCE_SHARE_ID TEXT")
+                currentVersion = 3
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
             db.execSQL("DROP TABLE IF EXISTS $TABLE_NOTES")
             onCreate(db)
         }
@@ -87,6 +95,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             val syncedIdx = c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)
             val opIdx = c.getColumnIndexOrThrow(COLUMN_PENDING_OP)
             val updateAvailableIdx = c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)
+            val sourceNoteIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_NOTE_ID)
+            val sourceShareIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_SHARE_ID)
 
             while (c.moveToNext()) {
                 val tagsStr = c.getString(tagsIdx).orEmpty()
@@ -104,7 +114,9 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                         isPinned = c.getInt(pinnedIdx) == 1,
                         isSynced = c.getInt(syncedIdx) == 1,
                         pendingOp = c.getString(opIdx).orEmpty(),
-                        updateAvailable = c.getInt(updateAvailableIdx) == 1
+                        updateAvailable = c.getInt(updateAvailableIdx) == 1,
+                        sourceNoteId = c.getString(sourceNoteIdIdx),
+                        sourceShareId = c.getString(sourceShareIdIdx)
                     )
                 )
             }
@@ -126,6 +138,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             if (c.moveToFirst()) {
                 val tagsStr = c.getString(c.getColumnIndexOrThrow(COLUMN_TAGS)).orEmpty()
                 val tagsList = tagsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                val sourceNoteIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_NOTE_ID)
+                val sourceShareIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_SHARE_ID)
                 return AppNote(
                     id = c.getString(c.getColumnIndexOrThrow(COLUMN_ID)),
                     title = c.getString(c.getColumnIndexOrThrow(COLUMN_TITLE)).orEmpty(),
@@ -137,7 +151,9 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                     isPinned = c.getInt(c.getColumnIndexOrThrow(COLUMN_IS_PINNED)) == 1,
                     isSynced = c.getInt(c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)) == 1,
                     pendingOp = c.getString(c.getColumnIndexOrThrow(COLUMN_PENDING_OP)).orEmpty(),
-                    updateAvailable = c.getInt(c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)) == 1
+                    updateAvailable = c.getInt(c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)) == 1,
+                    sourceNoteId = c.getString(sourceNoteIdIdx),
+                    sourceShareId = c.getString(sourceShareIdIdx)
                 )
             }
         }
@@ -166,6 +182,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             val syncedIdx = c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)
             val opIdx = c.getColumnIndexOrThrow(COLUMN_PENDING_OP)
             val updateAvailableIdx = c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)
+            val sourceNoteIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_NOTE_ID)
+            val sourceShareIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_SHARE_ID)
 
             while (c.moveToNext()) {
                 val tagsStr = c.getString(tagsIdx).orEmpty()
@@ -183,7 +201,9 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                         isPinned = c.getInt(pinnedIdx) == 1,
                         isSynced = c.getInt(syncedIdx) == 1,
                         pendingOp = c.getString(opIdx).orEmpty(),
-                        updateAvailable = c.getInt(updateAvailableIdx) == 1
+                        updateAvailable = c.getInt(updateAvailableIdx) == 1,
+                        sourceNoteId = c.getString(sourceNoteIdIdx),
+                        sourceShareId = c.getString(sourceShareIdIdx)
                     )
                 )
             }
@@ -205,6 +225,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(COLUMN_IS_SYNCED, if (isSynced) 1 else 0)
             put(COLUMN_PENDING_OP, pendingOp)
             put(COLUMN_UPDATE_AVAILABLE, if (note.updateAvailable) 1 else 0)
+            put(COLUMN_SOURCE_NOTE_ID, note.sourceNoteId)
+            put(COLUMN_SOURCE_SHARE_ID, note.sourceShareId)
         }
         db.replace(TABLE_NOTES, null, values)
     }

@@ -33,7 +33,7 @@ interface EchoWithinApiService {
         @Body body: CreateNoteRequest
     ): CreateNoteResponse
 
-    @POST("personal_post/sync/{noteId}")
+    @POST("api/v1/notes/{noteId}/sync")
     suspend fun syncNote(@Path("noteId") noteId: String): SyncNoteResponse
 
     @GET("api/v1/profile")

@@ -325,6 +325,11 @@ fun AppNavGraph(
                         onDone(newLocked)
                     }
                 },
+                onSyncClick = { onDone ->
+                    notesViewModel.syncNoteWithOriginal(noteId) { msg ->
+                        onDone(msg)
+                    }
+                },
                 isLocked = appLockViewModel.uiState.isLocked,
                 lockError = appLockViewModel.uiState.error,
                 lockLoading = appLockViewModel.uiState.isLoading,

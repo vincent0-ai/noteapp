@@ -39,6 +39,8 @@ data class NoteDto(
     val is_locked: Boolean = false,
     val is_pinned: Boolean = false,
     val update_available: Boolean = false,
+    val source_note_id: String? = null,
+    val source_share_id: String? = null,
     val created_at: String? = null,
     val updated_at: String? = null
 )
@@ -72,7 +74,9 @@ data class AppNote(
     val isPinned: Boolean = false,
     val isSynced: Boolean = true,
     val pendingOp: String = "none",
-    val updateAvailable: Boolean = false
+    val updateAvailable: Boolean = false,
+    val sourceNoteId: String? = null,
+    val sourceShareId: String? = null
 )
 
 data class ProfileResponse(

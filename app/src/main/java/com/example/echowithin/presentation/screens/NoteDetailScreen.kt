@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.LockOpen
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.ErrorRed
+import androidx.compose.material.icons.filled.Sync
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -47,6 +49,7 @@ fun NoteDetailScreen(
     onVersions: () -> Unit,
     onDelete: () -> Unit,
     onToggleLock: ((Boolean) -> Unit) -> Unit,
+    onSyncClick: (onDone: (String?) -> Unit) -> Unit,
     // Lock integration
     isLocked: Boolean,
     lockError: String?,
@@ -59,6 +62,7 @@ fun NoteDetailScreen(
     var isLoading by remember { mutableStateOf(initialNote == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showDeleteDialog by remember { mutableStateOf(false) }
+    var isSyncing by remember { mutableStateOf(false) }
 
     LaunchedEffect(noteId, initialNote) {
         if (initialNote != null) {
@@ -221,6 +225,71 @@ fun NoteDetailScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Update Available Banner (Sync Now)
+                if (noteState?.updateAvailable == true) {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
+                        border = BorderStroke(1.dp, Color(0xFFFFB74D))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE65100),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Update Available",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = Color(0xFFE65100)
+                                    )
+                                    Text(
+                                        text = "The original author updated this note. Sync to get the changes.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color(0xFF5D4037)
+                                    )
+                                }
+                            }
+                            Button(
+                                onClick = {
+                                    isSyncing = true
+                                    onSyncClick { msg ->
+                                        isSyncing = false
+                                        android.widget.Toast.makeText(context, msg ?: "Sync failed", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                enabled = !isSyncing,
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                if (isSyncing) {
+                                    CircularProgressIndicator(
+                                        color = Color.White,
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text("Sync Now", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
                 // Date & Metadata info row
                 note?.let {
                     Row(
@@ -316,6 +385,28 @@ fun NoteDetailScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
+                    if (noteState?.sourceNoteId != null) {
+                        IconButton(
+                            onClick = {
+                                isSyncing = true
+                                onSyncClick { msg ->
+                                    isSyncing = false
+                                    android.widget.Toast.makeText(context, msg ?: "Sync failed", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = !isSyncing
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(color = BrandOrange, modifier = Modifier.size(24.dp))
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = "Sync with original",
+                                    tint = if (noteState?.updateAvailable == true) Color(0xFFE65100) else BrandOrange
+                                )
+                            }
+                        }
+                    }
                     IconButton(onClick = {
                         if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
                             android.widget.Toast.makeText(context, "Sign in or create an account to share notes!", android.widget.Toast.LENGTH_SHORT).show()

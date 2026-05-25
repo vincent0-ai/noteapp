@@ -384,7 +384,9 @@ class NotesRepository {
             isPinned = is_pinned,
             isSynced = isSynced,
             pendingOp = pendingOp,
-            updateAvailable = update_available
+            updateAvailable = update_available,
+            sourceNoteId = source_note_id,
+            sourceShareId = source_share_id
         )
     }
 }
