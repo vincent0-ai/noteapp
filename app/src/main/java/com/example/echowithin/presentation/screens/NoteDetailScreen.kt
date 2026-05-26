@@ -12,8 +12,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -25,16 +27,30 @@ import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
-import com.example.echowithin.ui.theme.BrandOrange
-import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.material.icons.filled.Sync
+
+// Pre-compiled regex patterns for markdown rendering
+private val headingRegex = Regex("^(#+)\\s+(.*)$")
+private val blockquoteRegex = Regex("^\\s*>\\s*")
+private val unorderedListRegex = Regex("^\\s*[-*]\\s+(.*)")
+private val orderedListRegex = Regex("^\\s*(\\d+)\\.\\s+(.*)")
+private val horizontalRuleRegex = Regex("^\\s*(---+|\\*\\*\\*+)\\s*$")
+private val codeBlockFenceRegex = Regex("^```")
+private val boldDoubleAsteriskRegex = Regex("\\*\\*(.+?)\\*\\*")
+private val boldDoubleUnderscoreRegex = Regex("__(.+?)__")
+private val strikethroughRegex = Regex("~~(.+?)~~")
+private val inlineCodeRegex = Regex("`([^`]+)`")
+private val linkRegex = Regex("\\[([^]]+)]\\(([^)]+)\\)")
+private val italicAsteriskRegex = Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)")
+private val italicUnderscoreRegex = Regex("(?<=\\s|^)_(?!_)(.+?)(?<!_)_(?=\\s|$|[.,;:!?])")
 
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -58,6 +74,7 @@ fun NoteDetailScreen(
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var noteState by remember { mutableStateOf(initialNote) }
     var isLoading by remember { mutableStateOf(initialNote == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -100,7 +117,7 @@ fun NoteDetailScreen(
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Edit Note",
-                            tint = BrandOrange
+                            tint = MaterialTheme.colorScheme.primary
                         )
                     }
                 },
@@ -135,7 +152,7 @@ fun NoteDetailScreen(
                         text = "Locked Note",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = BrandOrange
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Text(
                         text = "Enter your PIN to view this protected note.",
@@ -167,7 +184,7 @@ fun NoteDetailScreen(
                         ),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BrandOrange,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         )
                     )
@@ -181,7 +198,7 @@ fun NoteDetailScreen(
                     Button(
                         onClick = { if (pin.length == 4) onVerifyPin(pin) },
                         enabled = pin.length == 4 && !lockLoading,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
                     ) {
@@ -200,7 +217,7 @@ fun NoteDetailScreen(
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = BrandOrange)
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         } else if (errorMessage != null) {
             Box(
@@ -230,8 +247,10 @@ fun NoteDetailScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
-                        border = BorderStroke(1.dp, Color(0xFFFFB74D))
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
                     ) {
                         Row(
                             modifier = Modifier.padding(12.dp),
@@ -246,7 +265,7 @@ fun NoteDetailScreen(
                                 Icon(
                                     imageVector = Icons.Default.Sync,
                                     contentDescription = null,
-                                    tint = Color(0xFFE65100),
+                                    tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Column {
@@ -254,12 +273,12 @@ fun NoteDetailScreen(
                                         text = "Update Available",
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.titleSmall,
-                                        color = Color(0xFFE65100)
+                                        color = MaterialTheme.colorScheme.primary
                                     )
                                     Text(
                                         text = "The original author updated this note. Sync to get the changes.",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = Color(0xFF5D4037)
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
                             }
@@ -272,7 +291,7 @@ fun NoteDetailScreen(
                                     }
                                 },
                                 enabled = !isSyncing,
-                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100)),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                                 shape = RoundedCornerShape(8.dp),
                                 modifier = Modifier.height(32.dp)
@@ -304,22 +323,18 @@ fun NoteDetailScreen(
                     }
                 }
 
-                // Tags Display
+                // Tags Display — minimal inline text style
                 if (note?.tags?.isNotEmpty() == true) {
                     FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         note.tags.forEach { tag ->
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text("#$tag", style = MaterialTheme.typography.bodySmall) },
-                                colors = SuggestionChipDefaults.suggestionChipColors(
-                                    labelColor = BrandAmber,
-                                    containerColor = BrandOrange.copy(alpha = 0.08f)
-                                ),
-                                border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.2f)),
-                                shape = RoundedCornerShape(8.dp)
+                            Text(
+                                text = "#$tag",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -330,7 +345,7 @@ fun NoteDetailScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, BrandAmber.copy(alpha = 0.2f)),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)),
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
@@ -338,7 +353,7 @@ fun NoteDetailScreen(
                                 text = "Reference Link",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = BrandAmber
+                                color = MaterialTheme.colorScheme.secondary
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -351,12 +366,14 @@ fun NoteDetailScreen(
                 }
 
                 // Content - render full content as markdown (no first-line dropping)
-                val displayContent = remember(note) {
+                val primaryColor = MaterialTheme.colorScheme.primary
+                val secondaryColor = MaterialTheme.colorScheme.secondary
+                val displayContent = remember(note, primaryColor, secondaryColor) {
                     val fullContent = note?.content.orEmpty()
                     if (fullContent.isBlank()) {
                         buildAnnotatedString { append("No content available") }
                     } else {
-                        renderMarkdown(fullContent)
+                        renderMarkdown(fullContent, primaryColor, secondaryColor)
                     }
                 }
 
@@ -397,12 +414,12 @@ fun NoteDetailScreen(
                             enabled = !isSyncing
                         ) {
                             if (isSyncing) {
-                                CircularProgressIndicator(color = BrandOrange, modifier = Modifier.size(24.dp))
+                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                             } else {
                                 Icon(
                                     imageVector = Icons.Default.Sync,
                                     contentDescription = "Sync with original",
-                                    tint = if (noteState?.updateAvailable == true) Color(0xFFE65100) else BrandOrange
+                                    tint = if (noteState?.updateAvailable == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                                 )
                             }
                         }
@@ -414,7 +431,17 @@ fun NoteDetailScreen(
                             onShare()
                         }
                     }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share", tint = BrandOrange)
+                        Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
+                    }
+                    // Copy content to clipboard
+                    IconButton(onClick = {
+                        val rawText = noteState?.content.orEmpty()
+                        if (rawText.isNotBlank()) {
+                            clipboardManager.setText(AnnotatedString(rawText))
+                            android.widget.Toast.makeText(context, "Note copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.primary)
                     }
                     IconButton(onClick = {
                         if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
@@ -423,7 +450,7 @@ fun NoteDetailScreen(
                             onVersions()
                         }
                     }) {
-                        Icon(Icons.Default.History, contentDescription = "Versions", tint = BrandAmber)
+                        Icon(Icons.Default.History, contentDescription = "Versions", tint = MaterialTheme.colorScheme.secondary)
                     }
                     IconButton(onClick = {
                         val isGuest = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()
@@ -439,7 +466,7 @@ fun NoteDetailScreen(
                         Icon(
                             if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
                             contentDescription = "Toggle Lock",
-                            tint = if (noteState?.isLocked == true) BrandAmber else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = { showDeleteDialog = true }) {
@@ -470,66 +497,173 @@ fun NoteDetailScreen(
     }
 }
 
-private fun renderMarkdown(markdown: String): AnnotatedString {
+private fun renderMarkdown(
+    markdown: String,
+    primaryColor: Color,
+    secondaryColor: Color
+): AnnotatedString {
     return buildAnnotatedString {
         val lines = markdown.split("\n")
-        lines.forEachIndexed { index, line ->
+        var inCodeBlock = false
+        var i = 0
+
+        while (i < lines.size) {
+            val line = lines[i]
+
+            // Toggle code block state on ``` fences
+            if (codeBlockFenceRegex.containsMatchIn(line)) {
+                if (!inCodeBlock) {
+                    inCodeBlock = true
+                    i++
+                    continue
+                } else {
+                    inCodeBlock = false
+                    i++
+                    continue
+                }
+            }
+
+            // Inside code block — render as monospace, no formatting
+            if (inCodeBlock) {
+                pushStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Monospace,
+                        color = secondaryColor,
+                        background = secondaryColor.copy(alpha = 0.08f)
+                    )
+                )
+                append(line)
+                pop()
+                if (i < lines.size - 1) append("\n")
+                i++
+                continue
+            }
+
+            // Horizontal rule
+            if (horizontalRuleRegex.matches(line)) {
+                append("─".repeat(30))
+                if (i < lines.size - 1) append("\n")
+                i++
+                continue
+            }
+
+            // Empty line → extra spacing
+            if (line.isBlank()) {
+                append("\n")
+                if (i < lines.size - 1) append("\n")
+                i++
+                continue
+            }
+
             var isHeading = false
             var isBlockquote = false
-            
+            var isList = false
+
             // Check for Headings
             if (line.startsWith("#")) {
-                val headingMatch = Regex("^(#+)\\s+(.*)$").find(line)
+                val headingMatch = headingRegex.find(line)
                 if (headingMatch != null) {
                     isHeading = true
                     val level = headingMatch.groupValues[1].length
                     val contentText = headingMatch.groupValues[2]
-                    
-                    val sizeMultiplier = when(level) {
+
+                    val sizeMultiplier = when (level) {
                         1 -> 1.3f
                         2 -> 1.2f
                         else -> 1.1f
                     }
                     pushStyle(
                         SpanStyle(
-                            color = BrandOrange,
+                            color = primaryColor,
                             fontWeight = FontWeight.Bold,
                             fontSize = (18 * sizeMultiplier).sp
                         )
                     )
-                    append(contentText)
+                    appendInlineFormatting(contentText, primaryColor, secondaryColor)
                     pop()
                 }
-            } 
+            }
             // Check for Blockquote
             else if (line.trimStart().startsWith(">")) {
                 isBlockquote = true
-                val contentText = line.replaceFirst(Regex("^\\s*>\\s*"), "")
+                val contentText = blockquoteRegex.replaceFirst(line, "")
                 pushStyle(
                     SpanStyle(
-                        color = BrandAmber,
+                        color = secondaryColor,
                         fontStyle = FontStyle.Italic
                     )
                 )
                 append("▎ ") // Visual bar indicator
-                appendInlineFormatting(contentText)
+                appendInlineFormatting(contentText, primaryColor, secondaryColor)
                 pop()
             }
-            
-            if (!isHeading && !isBlockquote) {
-                appendInlineFormatting(line)
+            // Check for unordered list
+            else if (unorderedListRegex.matches(line)) {
+                isList = true
+                val match = unorderedListRegex.find(line)!!
+                val content = match.groupValues[1]
+                append("  • ")
+                appendInlineFormatting(content, primaryColor, secondaryColor)
             }
-            
-            if (index < lines.size - 1) {
+            // Check for ordered list
+            else if (orderedListRegex.matches(line)) {
+                isList = true
+                val match = orderedListRegex.find(line)!!
+                val number = match.groupValues[1]
+                val content = match.groupValues[2]
+                append("  $number. ")
+                appendInlineFormatting(content, primaryColor, secondaryColor)
+            }
+
+            if (!isHeading && !isBlockquote && !isList) {
+                appendInlineFormatting(line, primaryColor, secondaryColor)
+            }
+
+            if (i < lines.size - 1) {
                 append("\n")
             }
+            i++
         }
     }
 }
 
-private fun AnnotatedString.Builder.appendInlineFormatting(text: String) {
+private fun AnnotatedString.Builder.appendInlineFormatting(
+    text: String,
+    primaryColor: Color,
+    secondaryColor: Color
+) {
     var i = 0
     while (i < text.length) {
+        // Strikethrough ~~text~~
+        if (i + 1 < text.length && text[i] == '~' && text[i + 1] == '~') {
+            val endIdx = text.indexOf("~~", i + 2)
+            if (endIdx != -1) {
+                pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
+                appendInlineFormatting(text.substring(i + 2, endIdx), primaryColor, secondaryColor)
+                pop()
+                i = endIdx + 2
+                continue
+            }
+        }
+
+        // Markdown link [text](url) — render text only
+        if (text[i] == '[') {
+            val linkMatch = linkRegex.find(text, i)
+            if (linkMatch != null && linkMatch.range.first == i) {
+                val linkText = linkMatch.groupValues[1]
+                pushStyle(
+                    SpanStyle(
+                        color = primaryColor,
+                        textDecoration = TextDecoration.Underline
+                    )
+                )
+                append(linkText)
+                pop()
+                i = linkMatch.range.last + 1
+                continue
+            }
+        }
+
         // Monospace Code `code`
         if (text[i] == '`') {
             val endIdx = text.indexOf('`', i + 1)
@@ -537,8 +671,8 @@ private fun AnnotatedString.Builder.appendInlineFormatting(text: String) {
                 pushStyle(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
-                        color = BrandAmber,
-                        background = Color(0x1AFFB000) // BrandAmber with 10% opacity
+                        color = secondaryColor,
+                        background = secondaryColor.copy(alpha = 0.10f)
                     )
                 )
                 append(text.substring(i + 1, endIdx))
@@ -547,51 +681,68 @@ private fun AnnotatedString.Builder.appendInlineFormatting(text: String) {
                 continue
             }
         }
-        
-        // Bold **bold** or __bold__
-        if (i + 1 < text.length && text[i] == '*' && text[i+1] == '*') {
+
+        // Bold **bold**
+        if (i + 1 < text.length && text[i] == '*' && text[i + 1] == '*') {
             val endIdx = text.indexOf("**", i + 2)
             if (endIdx != -1) {
                 pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                appendInlineFormatting(text.substring(i + 2, endIdx))
+                appendInlineFormatting(text.substring(i + 2, endIdx), primaryColor, secondaryColor)
                 pop()
                 i = endIdx + 2
                 continue
             }
         }
-        if (i + 1 < text.length && text[i] == '_' && text[i+1] == '_') {
+        // Bold __bold__
+        if (i + 1 < text.length && text[i] == '_' && text[i + 1] == '_') {
             val endIdx = text.indexOf("__", i + 2)
             if (endIdx != -1) {
                 pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                appendInlineFormatting(text.substring(i + 2, endIdx))
+                appendInlineFormatting(text.substring(i + 2, endIdx), primaryColor, secondaryColor)
                 pop()
                 i = endIdx + 2
                 continue
             }
         }
-        
-        // Italic *italic* or _italic_
+
+        // Italic *italic*
         if (text[i] == '*') {
             val endIdx = text.indexOf('*', i + 1)
             if (endIdx != -1) {
                 pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                appendInlineFormatting(text.substring(i + 1, endIdx))
+                appendInlineFormatting(text.substring(i + 1, endIdx), primaryColor, secondaryColor)
                 pop()
                 i = endIdx + 1
                 continue
             }
         }
+        // Italic _italic_ — only at word boundaries (not inside variable_names)
         if (text[i] == '_') {
-            val endIdx = text.indexOf('_', i + 1)
-            if (endIdx != -1) {
-                pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                appendInlineFormatting(text.substring(i + 1, endIdx))
-                pop()
-                i = endIdx + 1
-                continue
+            val atWordBoundary = (i == 0 || text[i - 1].isWhitespace() || text[i - 1] in ".,;:!?\"'(")
+            if (atWordBoundary) {
+                // Find closing _ that is also at a word boundary
+                var endIdx = -1
+                var searchFrom = i + 1
+                while (searchFrom < text.length) {
+                    val candidate = text.indexOf('_', searchFrom)
+                    if (candidate == -1) break
+                    val afterBoundary = (candidate == text.length - 1 || text[candidate + 1].isWhitespace() || text[candidate + 1] in ".,;:!?\"')")
+                    if (afterBoundary) {
+                        endIdx = candidate
+                        break
+                    }
+                    searchFrom = candidate + 1
+                }
+                if (endIdx != -1 && endIdx > i + 1) {
+                    pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
+                    appendInlineFormatting(text.substring(i + 1, endIdx), primaryColor, secondaryColor)
+                    pop()
+                    i = endIdx + 1
+                    continue
+                }
             }
         }
-        
+
         // Regular character
         append(text[i].toString())
         i++

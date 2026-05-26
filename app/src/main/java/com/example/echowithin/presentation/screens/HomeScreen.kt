@@ -32,12 +32,16 @@ import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.ui.input.pointer.pointerInput
-import com.example.echowithin.ui.theme.BrandOrange
-import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.ErrorRed
+
+// ── Pre-compiled regex patterns for stripMarkdown (performance fix) ──
+private val REGEX_HEADING = Regex("(?m)^#+\\s+")
+private val REGEX_BLOCKQUOTE = Regex("(?m)^[\\s*+-]*>\\s*")
+private val REGEX_LIST_ITEM = Regex("(?m)^[\\s]*[*+-]\\s+")
+private val REGEX_FORMATTING = Regex("\\*\\*|__|\\*|_|~~")
+private val REGEX_BACKTICK = Regex("`+")
+private val REGEX_LINK = Regex("\\[(.*?)\\]\\(.*?\\)")
+private val REGEX_IMAGE = Regex("!\\[(.*?)\\]\\(.*?\\)")
 
 enum class HomeTab(val title: String) {
     NOTES("Notes"),
@@ -90,6 +94,10 @@ fun HomeScreen(
 ) {
     var activeTab by remember { mutableStateOf(HomeTab.NOTES) }
 
+    // Memoize filtered lists to avoid creating new List instances on every recomposition
+    val unlockedNotes = remember(notes) { notes.filter { !it.isLocked } }
+    val lockedNotes = remember(notes) { notes.filter { it.isLocked } }
+
     if (updateInfo != null) {
         UpdateDialog(
             versionName = updateInfo.versionName,
@@ -107,7 +115,7 @@ fun HomeScreen(
                 actions = {
                     if (isSyncing) {
                         CircularProgressIndicator(
-                            color = BrandOrange,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(28.dp).padding(4.dp),
                             strokeWidth = 2.dp
                         )
@@ -130,7 +138,7 @@ fun HomeScreen(
             if (activeTab == HomeTab.NOTES) {
                 FloatingActionButton(
                     onClick = onNewNoteClick,
-                    containerColor = BrandOrange,
+                    containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White,
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -153,7 +161,7 @@ fun HomeScreen(
             ScrollableTabRow(
                 selectedTabIndex = activeTab.ordinal,
                 containerColor = MaterialTheme.colorScheme.background,
-                contentColor = BrandOrange,
+                contentColor = MaterialTheme.colorScheme.primary,
                 edgePadding = 8.dp
             ) {
                 HomeTab.entries.forEach { tab ->
@@ -165,7 +173,7 @@ fun HomeScreen(
                                 Text(
                                     text = tab.title,
                                     fontWeight = if (activeTab == tab) FontWeight.Bold else FontWeight.Normal,
-                                    color = if (activeTab == tab) BrandOrange else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (activeTab == tab) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 if (tab == HomeTab.ACTIVITY && unreadNotificationsCount > 0) {
                                     Spacer(modifier = Modifier.width(4.dp))
@@ -192,7 +200,7 @@ fun HomeScreen(
             // Tab Content
             when (activeTab) {
                 HomeTab.NOTES -> NotesTabContent(
-                    notes = notes.filter { !it.isLocked },
+                    notes = unlockedNotes,
                     isLoading = isLoading,
                     error = error,
                     onNoteClick = onNoteClick,
@@ -200,7 +208,7 @@ fun HomeScreen(
                     onSyncNoteClick = onSyncNoteClick
                 )
                 HomeTab.LOCKED -> LockedTabContent(
-                    lockedNotes = notes.filter { it.isLocked },
+                    lockedNotes = lockedNotes,
                     hasPin = hasPin,
                     isLocked = isLocked,
                     lockError = lockError,
@@ -246,7 +254,7 @@ private fun NotesTabContent(
             val brush = shimmerBrush()
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
                 items(4) {
@@ -271,7 +279,7 @@ private fun NotesTabContent(
                     )
                     Text(text = error, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Button(onClick = onRetryClick, colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)) {
+                    Button(onClick = onRetryClick, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
                         Icon(Icons.Default.Refresh, contentDescription = "Retry")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Retry")
@@ -289,7 +297,7 @@ private fun NotesTabContent(
                         text = "Unspoken thoughts start here",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = BrandOrange
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
@@ -303,14 +311,15 @@ private fun NotesTabContent(
         else -> {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
-                items(notes, key = { it.id }) { note ->
+                items(notes, key = { it.id }, contentType = { "note_card" }) { note ->
                     NoteCard(
                         note = note,
                         onClick = { onNoteClick(note.id) },
-                        onSyncClick = { onSyncNoteClick(note.id) }
+                        onSyncClick = { onSyncNoteClick(note.id) },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -333,61 +342,130 @@ private fun LockedTabContent(
     onSyncNoteClick: (String) -> Unit
 ) {
     if (!hasPin) {
-        // No PIN set up
-        Box(
-            modifier = Modifier.fillMaxSize().padding(32.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            var pin by remember { mutableStateOf("") }
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+        // No PIN set up — check if we're offline with a previously configured PIN
+        val isOfflineConfigured = com.example.echowithin.data.network.SessionManager.localPinConfigured
+        if (isOfflineConfigured) {
+            // PIN was configured before but offline check returned false — show verify prompt
+            Box(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                contentAlignment = Alignment.Center
             ) {
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = BrandOrange.copy(alpha = 0.1f),
-                    border = BorderStroke(2.dp, BrandOrange),
-                    modifier = Modifier.size(72.dp)
+                var pin by remember { mutableStateOf("") }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.Lock, contentDescription = null, tint = BrandOrange, modifier = Modifier.size(32.dp))
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = ErrorRed.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, ErrorRed),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(32.dp))
+                        }
+                    }
+                    Text(
+                        text = "Locked Notes",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Enter your 4-digit PIN to view locked notes.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
+                        label = { Text("Enter PIN") },
+                        modifier = Modifier.width(200.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    if (lockError != null) {
+                        Text(text = lockError, color = ErrorRed, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (lockLoading) {
+                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+                    }
+                    Button(
+                        onClick = { onVerifyPin(pin); pin = "" },
+                        enabled = pin.length == 4 && !lockLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.width(200.dp)
+                    ) {
+                        Text("Unlock", fontWeight = FontWeight.Bold)
                     }
                 }
-                Text(
-                    text = "Set Up Security PIN",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = BrandOrange
-                )
-                Text(
-                    text = "Create a 4-digit PIN to protect sensitive notes.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-                OutlinedTextField(
-                    value = pin,
-                    onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
-                    label = { Text("4-digit PIN") },
-                    modifier = Modifier.width(200.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BrandOrange,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        focusedLabelColor = BrandOrange
-                    )
-                )
-                Button(
-                    onClick = { onSetupPin(pin); pin = "" },
-                    enabled = pin.length == 4 && !lockLoading,
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.width(200.dp)
+            }
+        } else {
+            // Truly no PIN set up — show setup UI
+            Box(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                var pin by remember { mutableStateOf("") }
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Text("Set PIN", fontWeight = FontWeight.Bold)
+                    Surface(
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
+                        }
+                    }
+                    Text(
+                        text = "Set Up Security PIN",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "Create a 4-digit PIN to protect sensitive notes.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    OutlinedTextField(
+                        value = pin,
+                        onValueChange = { if (it.length <= 4 && it.all { c -> c.isDigit() }) pin = it },
+                        label = { Text("4-digit PIN") },
+                        modifier = Modifier.width(200.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                            focusedLabelColor = MaterialTheme.colorScheme.primary
+                        )
+                    )
+                    Button(
+                        onClick = { onSetupPin(pin); pin = "" },
+                        enabled = pin.length == 4 && !lockLoading,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.width(200.dp)
+                    ) {
+                        Text("Set PIN", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -416,7 +494,7 @@ private fun LockedTabContent(
                     text = "Locked Notes",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = BrandOrange
+                    color = MaterialTheme.colorScheme.primary
                 )
                 Text(
                     text = "Enter your 4-digit PIN to view locked notes.",
@@ -434,21 +512,21 @@ private fun LockedTabContent(
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BrandOrange,
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        focusedLabelColor = BrandOrange
+                        focusedLabelColor = MaterialTheme.colorScheme.primary
                     )
                 )
                 if (lockError != null) {
                     Text(text = lockError, color = ErrorRed, style = MaterialTheme.typography.bodySmall)
                 }
                 if (lockLoading) {
-                    CircularProgressIndicator(color = BrandOrange, modifier = Modifier.size(24.dp))
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
                 }
                 Button(
                     onClick = { onVerifyPin(pin); pin = "" },
                     enabled = pin.length == 4 && !lockLoading,
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier.width(200.dp)
                 ) {
@@ -466,12 +544,12 @@ private fun LockedTabContent(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Surface(
                         shape = RoundedCornerShape(20.dp),
-                        color = BrandAmber.copy(alpha = 0.1f),
-                        border = BorderStroke(2.dp, BrandAmber),
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
+                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.secondary),
                         modifier = Modifier.size(72.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.LockOpen, contentDescription = null, tint = BrandAmber, modifier = Modifier.size(32.dp))
+                            Icon(Icons.Default.LockOpen, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(32.dp))
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
@@ -479,7 +557,7 @@ private fun LockedTabContent(
                         text = "No locked notes yet",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = BrandAmber
+                        color = MaterialTheme.colorScheme.secondary
                     )
                     Text(
                         text = "Lock a note from its detail page to protect it.",
@@ -492,14 +570,15 @@ private fun LockedTabContent(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
+                verticalArrangement = Arrangement.spacedBy(0.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
             ) {
-                items(lockedNotes, key = { it.id }) { note ->
+                items(lockedNotes, key = { it.id }, contentType = { "note_card" }) { note ->
                     NoteCard(
                         note = note,
                         onClick = { onNoteClick(note.id) },
-                        onSyncClick = { onSyncNoteClick(note.id) }
+                        onSyncClick = { onSyncNoteClick(note.id) },
+                        modifier = Modifier.animateItem()
                     )
                 }
             }
@@ -524,7 +603,7 @@ private fun ActivityTabContent(
     when {
         proposalsLoading -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandOrange)
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         }
         !hasContent -> {
@@ -537,7 +616,7 @@ private fun ActivityTabContent(
                         text = "All quiet for now",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = BrandOrange
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -557,7 +636,7 @@ private fun ActivityTabContent(
             ) {
                 // Mark all read button
                 if (unreadNotificationsCount > 0) {
-                    item {
+                    item(key = "mark_all_read") {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.End
@@ -565,7 +644,7 @@ private fun ActivityTabContent(
                             TextButton(onClick = onMarkAllRead) {
                                 Text(
                                     text = "Mark all as read",
-                                    color = BrandOrange,
+                                    color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold,
                                     style = MaterialTheme.typography.labelMedium
                                 )
@@ -576,15 +655,15 @@ private fun ActivityTabContent(
 
                 // Proposals section
                 if (proposals.isNotEmpty()) {
-                    item {
+                    item(key = "proposals_header") {
                         Text(
                             text = "Pending Proposals",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = BrandAmber
+                            color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    items(proposals) { proposal ->
+                    items(proposals, key = { it.version_id }, contentType = { "proposal" }) { proposal ->
                         ProposalCard(
                             proposal = proposal,
                             onApprove = { onApproveProposal(proposal.version_id) },
@@ -595,16 +674,16 @@ private fun ActivityTabContent(
 
                 // Notifications section
                 if (notifications.isNotEmpty()) {
-                    item {
+                    item(key = "notifications_header") {
                         Text(
                             text = "Recent Activity",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = BrandAmber,
+                            color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.padding(top = if (proposals.isNotEmpty()) 8.dp else 0.dp)
                         )
                     }
-                    items(notifications) { notification ->
+                    items(notifications, key = { it._id }, contentType = { "notification" }) { notification ->
                         NotificationCard(notification = notification)
                     }
                 }
@@ -617,15 +696,15 @@ private fun ActivityTabContent(
 private fun NotificationCard(notification: NotificationDto) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(
             1.dp,
-            if (notification.has_unread) BrandOrange.copy(alpha = 0.4f)
+            if (notification.has_unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
             else MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
         ),
         colors = CardDefaults.cardColors(
             containerColor = if (notification.has_unread)
-                BrandOrange.copy(alpha = 0.04f)
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
             else MaterialTheme.colorScheme.surface
         )
     ) {
@@ -652,12 +731,12 @@ private fun NotificationCard(notification: NotificationDto) {
                     }
                     Surface(
                         shape = RoundedCornerShape(8.dp),
-                        color = BrandAmber.copy(alpha = 0.12f)
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
                     ) {
                         Text(
                             text = "$typeEmoji $typeLabel",
                             style = MaterialTheme.typography.labelSmall,
-                            color = BrandAmber,
+                            color = MaterialTheme.colorScheme.secondary,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                         )
@@ -675,7 +754,7 @@ private fun NotificationCard(notification: NotificationDto) {
                         Text(
                             text = "$themeEmoji ${notification.surprise_theme.replaceFirstChar { it.uppercase() }}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = BrandOrange
+                            color = MaterialTheme.colorScheme.primary
                         )
                     }
                 }
@@ -684,7 +763,7 @@ private fun NotificationCard(notification: NotificationDto) {
                 if (notification.has_unread) {
                     Surface(
                         shape = RoundedCornerShape(6.dp),
-                        color = BrandOrange
+                        color = MaterialTheme.colorScheme.primary
                     ) {
                         Text(
                             text = "NEW",
@@ -746,7 +825,7 @@ private fun ProposalCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -759,7 +838,7 @@ private fun ProposalCard(
                 text = proposal.note_preview.take(60),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
-                color = BrandOrange,
+                color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -809,7 +888,7 @@ private fun ProposalCard(
                 Button(
                     onClick = onApprove,
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                     modifier = Modifier.height(34.dp)
                 ) {
@@ -832,7 +911,7 @@ private fun SharedLinksTabContent(
     when {
         sharesLoading -> {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(color = BrandOrange)
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
         }
         activeShares.isEmpty() -> {
@@ -854,7 +933,7 @@ private fun SharedLinksTabContent(
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
             ) {
-                items(activeShares) { (note, shares) ->
+                items(activeShares, key = { (note, _) -> note.id }, contentType = { "shared_note" }) { (note, shares) ->
                     SharedNoteCard(
                         note = note,
                         shares = shares,
@@ -876,7 +955,7 @@ private fun SharedNoteCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
@@ -903,7 +982,7 @@ private fun SharedNoteCard(
                 Button(
                     onClick = onManageShares,
                     shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                     modifier = Modifier.height(30.dp)
                 ) {
@@ -950,12 +1029,12 @@ private fun ShareLinkRow(
                     // Permissions badge
                     Surface(
                         shape = RoundedCornerShape(4.dp),
-                        color = BrandAmber.copy(alpha = 0.15f)
+                        color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)
                     ) {
                         Text(
                             text = share.permissions,
                             style = MaterialTheme.typography.labelSmall,
-                            color = BrandAmber,
+                            color = MaterialTheme.colorScheme.secondary,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -964,12 +1043,12 @@ private fun ShareLinkRow(
                     if (share.surprise_theme != "none" && share.surprise_theme.isNotBlank()) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = BrandOrange.copy(alpha = 0.12f)
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                         ) {
                             Text(
                                 text = share.surprise_theme,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = BrandOrange,
+                                color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -982,22 +1061,23 @@ private fun ShareLinkRow(
                 shape = RoundedCornerShape(8.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 modifier = Modifier.height(30.dp),
-                border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.5f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
             ) {
-                Text("Open Link", style = MaterialTheme.typography.labelSmall, color = BrandOrange)
+                Text("Open Link", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             }
         }
     }
 }
 
-// ── Note Card ───────────────────────────────────────────────
+// ── Note Card (Notesnook-inspired flat design) ─────────────────────────
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun NoteCard(
     note: AppNote,
     onClick: () -> Unit,
-    onSyncClick: (() -> Unit)? = null
+    onSyncClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     val strippedContent = remember(note.content) { stripMarkdown(note.content) }
     val previewTitle = remember(strippedContent) {
@@ -1009,41 +1089,16 @@ fun NoteCard(
     }
     val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "clickScale"
-    )
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .graphicsLayer(scaleX = scale, scaleY = scale)
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onPress = {
-                        isPressed = true
-                        try {
-                            awaitRelease()
-                        } finally {
-                            isPressed = false
-                        }
-                    },
-                    onTap = { onClick() }
-                )
-            },
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    Column(modifier = modifier) {
+        // Flat note item — no Card, just content + divider (Notesnook style)
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            // Title row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1051,111 +1106,102 @@ fun NoteCard(
             ) {
                 Text(
                     text = previewTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = BrandOrange,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f)
                 )
                 if (!note.isSynced) {
                     val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = BrandAmber.copy(alpha = 0.15f),
+                    Text(
+                        text = badgeText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary,
                         modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+
+            // Update available banner
+            if (note.updateAvailable) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSyncClick?.invoke() }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(text = "⚠️", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            text = "Update Available",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = badgeText,
+                            text = "Sync Now",
                             style = MaterialTheme.typography.labelSmall,
-                            color = BrandAmber,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Sync",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
             }
 
-            if (note.updateAvailable) {
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = BrandOrange.copy(alpha = 0.12f),
-                    border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.3f)),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .clickable { onSyncClick?.invoke() }
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(text = "⚠️", style = MaterialTheme.typography.bodySmall)
-                            Text(
-                                text = "Update Available",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = BrandOrange
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Sync Now",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = BrandOrange
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Sync",
-                                tint = BrandOrange,
-                                modifier = Modifier.size(14.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
+            // Body preview
             if (previewBody.isNotBlank()) {
                 Text(
-                    text = previewBody.take(180),
+                    text = previewBody.take(140),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
+            // Tags as inline text (Notesnook-style: plain #tag, no chips)
             if (note.tags.isNotEmpty()) {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                    modifier = Modifier.padding(top = 4.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.padding(top = 2.dp)
                 ) {
-                    note.tags.forEach { tag ->
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = BrandOrange.copy(alpha = 0.08f),
-                            border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.2f))
-                        ) {
-                            Text(
-                                text = "#$tag",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = BrandAmber,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                    note.tags.take(5).forEach { tag ->
+                        Text(
+                            text = "#$tag",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (note.tags.size > 5) {
+                        Text(
+                            text = "+${note.tags.size - 5}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
 
+            // Metadata row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1165,7 +1211,7 @@ fun NoteCard(
                     Text(
                         text = "Ref: ${note.reference}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = BrandAmber.copy(alpha = 0.7f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f).padding(end = 8.dp)
@@ -1176,10 +1222,16 @@ fun NoteCard(
                 Text(
                     text = relativeTime,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }
         }
+
+        // Thin divider (Notesnook flat list style)
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+        )
     }
 }
 
@@ -1211,7 +1263,7 @@ private fun formatRelativeTime(timestamp: String): String {
             return timestamp
         }
         
-        val diffMs = System.currentTimeMillis() - date.time
+        val diffMs = System.currentTimeMillis() - date!!.time
         val diffSec = diffMs / 1000
         val diffMin = diffSec / 60
         val diffHour = diffMin / 60
@@ -1237,13 +1289,13 @@ private fun formatRelativeTime(timestamp: String): String {
 
 private fun stripMarkdown(text: String): String {
     var clean = text
-    clean = clean.replace(Regex("(?m)^#+\\s+"), "")
-    clean = clean.replace(Regex("(?m)^[\\s*+-]*>\\s*"), "")
-    clean = clean.replace(Regex("(?m)^[\\s]*[*+-]\\s+"), "")
-    clean = clean.replace(Regex("\\*\\*|__|\\*|_|~~"), "")
-    clean = clean.replace(Regex("`+"), "")
-    clean = clean.replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
-    clean = clean.replace(Regex("!\\[(.*?)\\]\\(.*?\\)"), "$1")
+    clean = REGEX_HEADING.replace(clean, "")
+    clean = REGEX_BLOCKQUOTE.replace(clean, "")
+    clean = REGEX_LIST_ITEM.replace(clean, "")
+    clean = REGEX_FORMATTING.replace(clean, "")
+    clean = REGEX_BACKTICK.replace(clean, "")
+    clean = REGEX_LINK.replace(clean, "$1")
+    clean = REGEX_IMAGE.replace(clean, "$1")
     return clean
 }
 
@@ -1286,20 +1338,17 @@ private fun shimmerBrush(showShimmer: Boolean = true, targetValue: Float = 1000f
 
 @Composable
 private fun NoteCardPlaceholder(brush: Brush) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-    ) {
+    Column {
         Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.45f)
-                    .height(20.dp)
+                    .height(18.dp)
                     .background(brush, shape = RoundedCornerShape(4.dp))
             )
             Box(
@@ -1317,20 +1366,24 @@ private fun NoteCardPlaceholder(brush: Brush) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(top = 4.dp)
+                modifier = Modifier.padding(top = 2.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(width = 64.dp, height = 18.dp)
-                        .background(brush, shape = RoundedCornerShape(6.dp))
+                        .size(width = 50.dp, height = 14.dp)
+                        .background(brush, shape = RoundedCornerShape(4.dp))
                 )
                 Box(
                     modifier = Modifier
-                        .size(width = 80.dp, height = 18.dp)
-                        .background(brush, shape = RoundedCornerShape(6.dp))
+                        .size(width = 60.dp, height = 14.dp)
+                        .background(brush, shape = RoundedCornerShape(4.dp))
                 )
             }
         }
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
+        )
     }
 }
 
@@ -1349,11 +1402,11 @@ fun UpdateDialog(
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = null,
-                    tint = BrandOrange,
+                    tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(24.dp)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("New Update Available!", fontWeight = FontWeight.Bold, color = BrandOrange)
+                Text("New Update Available!", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             }
         },
         text = {
@@ -1389,8 +1442,8 @@ fun UpdateDialog(
                     ) {
                         LinearProgressIndicator(
                             progress = { downloadProgress },
-                            color = BrandOrange,
-                            trackColor = BrandOrange.copy(alpha = 0.2f),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                             modifier = Modifier.fillMaxWidth().height(8.dp)
                         )
                         Text(
@@ -1406,7 +1459,7 @@ fun UpdateDialog(
             if (downloadProgress == null) {
                 Button(
                     onClick = onConfirm,
-                    colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
                     Text("Update Now", color = Color.White)
                 }

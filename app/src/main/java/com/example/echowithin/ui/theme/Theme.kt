@@ -7,14 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 private val EchoWithinColorScheme = darkColorScheme(
-    primary = BrandOrange,
+    primary = BrandGreen,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFF3D2200),
-    onPrimaryContainer = BrandAmber,
-    secondary = BrandAmber,
+    primaryContainer = Color(0xFF003D19),
+    onPrimaryContainer = BrandGreenLight,
+    secondary = BrandGreenLight,
     onSecondary = BrandInk,
-    secondaryContainer = Color(0xFF3D2E00),
-    onSecondaryContainer = BrandAmber,
+    secondaryContainer = Color(0xFF1B3D1F),
+    onSecondaryContainer = BrandGreenLight,
     tertiary = InfoBlue,
     onTertiary = Color.White,
     background = DarkBackground,
@@ -28,10 +28,10 @@ private val EchoWithinColorScheme = darkColorScheme(
     errorContainer = ErrorRedContainer,
     onErrorContainer = Color(0xFFFCA5A5),
     outline = DarkBorder,
-    outlineVariant = Color(0xFF2A3142),
+    outlineVariant = Color(0xFF2A2A2A),
     inverseSurface = TextPrimary,
     inverseOnSurface = DarkBackground,
-    surfaceTint = BrandOrange
+    surfaceTint = BrandGreen
 )
 
 @Composable
@@ -40,7 +40,7 @@ fun EchoWithinTheme(
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
-    // Always use brand dark theme — matches the website
+    // Always use brand dark theme — matches the Notesnook-inspired aesthetic
     MaterialTheme(
         colorScheme = EchoWithinColorScheme,
         typography = Typography,

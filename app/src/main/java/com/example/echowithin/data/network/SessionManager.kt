@@ -56,6 +56,7 @@ object SessionManager {
 
     private const val KEY_LOCAL_PIN_HASH = "local_pin_hash"
     private const val KEY_LOCAL_HAS_PIN = "local_has_pin"
+    private const val KEY_LOCAL_PIN_CONFIGURED = "local_pin_configured"
 
     var localPinHash: String?
         get() = prefs?.getString(KEY_LOCAL_PIN_HASH, null)
@@ -67,6 +68,17 @@ object SessionManager {
         get() = prefs?.getBoolean(KEY_LOCAL_HAS_PIN, false) ?: false
         set(value) {
             prefs?.edit()?.putBoolean(KEY_LOCAL_HAS_PIN, value)?.apply()
+        }
+
+    /**
+     * Tracks whether a PIN has EVER been configured (online or offline).
+     * Only cleared on successful online server PIN removal.
+     * Prevents the offline PIN bypass vulnerability.
+     */
+    var localPinConfigured: Boolean
+        get() = prefs?.getBoolean(KEY_LOCAL_PIN_CONFIGURED, false) ?: false
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_LOCAL_PIN_CONFIGURED, value)?.apply()
         }
 
     fun clear() {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Done
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,15 +25,32 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
-import com.example.echowithin.ui.theme.BrandAmber
-import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.ui.Alignment
-import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.FormatListBulleted
+import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.FormatStrikethrough
+import androidx.compose.foundation.horizontalScroll
+
+// Pre-compiled regex for markdown preview rendering
+private val HEADING_REGEX_EDITOR = Regex("^(#+)\\s+(.*)$")
+private val BLOCKQUOTE_REGEX_EDITOR = Regex("^\\s*>\\s*(.*)")
+private val LINK_REGEX_EDITOR = Regex("\\[(.*?)\\]\\(.*?\\)")
+private val STRIKETHROUGH_REGEX_EDITOR = Regex("~~(.*?)~~")
+
+private const val MAX_CHAR_LIMIT = 50_000
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,13 +67,17 @@ fun NoteEditorScreen(
     onVerifyPin: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var content by remember { mutableStateOf(initialNote?.content.orEmpty()) }
+    var contentField by remember { mutableStateOf(TextFieldValue(initialNote?.content.orEmpty())) }
     var reference by remember { mutableStateOf(initialNote?.reference.orEmpty()) }
     var tags by remember { mutableStateOf(initialNote?.tags?.joinToString(",").orEmpty()) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
+    val content = contentField.text
     val hasChanges = content.isNotBlank()
     val tabTitles = listOf("Write", "Preview")
+    val wordCount = remember(content) {
+        if (content.isBlank()) 0 else content.trim().split("\\s+".toRegex()).size
+    }
 
     Scaffold(
         topBar = {
@@ -84,7 +106,7 @@ fun NoteEditorScreen(
                         Icon(
                             imageVector = Icons.Default.Done,
                             contentDescription = "Save Note",
-                            tint = if (hasChanges && !isSaving) BrandOrange
+                            tint = if (hasChanges && !isSaving) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
                         )
                     }
@@ -97,6 +119,7 @@ fun NoteEditorScreen(
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (initialNote?.isLocked == true && isLocked) {
+            // Locked note — PIN verification
             Box(
                 modifier = Modifier.fillMaxSize().padding(innerPadding).padding(32.dp),
                 contentAlignment = Alignment.Center
@@ -120,7 +143,7 @@ fun NoteEditorScreen(
                         text = "Locked Note",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = BrandOrange
+                        color = MaterialTheme.colorScheme.primary
                     )
                     Text(
                         text = "Enter your PIN to edit this protected note.",
@@ -152,7 +175,7 @@ fun NoteEditorScreen(
                         ),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = BrandOrange,
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         )
                     )
@@ -166,7 +189,7 @@ fun NoteEditorScreen(
                     Button(
                         onClick = { if (pin.length == 4) onVerifyPin(pin) },
                         enabled = pin.length == 4 && !lockLoading,
-                        colors = ButtonDefaults.buttonColors(containerColor = BrandOrange),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         shape = RoundedCornerShape(12.dp),
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)
                     ) {
@@ -188,7 +211,7 @@ fun NoteEditorScreen(
                 TabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.background,
-                    contentColor = BrandOrange
+                    contentColor = MaterialTheme.colorScheme.primary
                 ) {
                     tabTitles.forEachIndexed { index, title ->
                         Tab(
@@ -197,7 +220,7 @@ fun NoteEditorScreen(
                             text = {
                                 Text(
                                     text = title,
-                                    color = if (selectedTab == index) BrandOrange
+                                    color = if (selectedTab == index) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                                 )
                             }
@@ -207,12 +230,19 @@ fun NoteEditorScreen(
 
                 when (selectedTab) {
                     0 -> WriteTab(
-                        content = content,
-                        onContentChange = { content = it },
+                        contentField = contentField,
+                        onContentChange = {
+                            if (it.text.length <= MAX_CHAR_LIMIT) {
+                                contentField = it
+                            }
+                        },
                         reference = reference,
                         onReferenceChange = { reference = it },
                         tags = tags,
-                        onTagsChange = { tags = it }
+                        onTagsChange = { tags = it },
+                        charCount = content.length,
+                        wordCount = wordCount,
+                        maxChars = MAX_CHAR_LIMIT
                     )
                     1 -> PreviewTab(content = content)
                 }
@@ -223,79 +253,186 @@ fun NoteEditorScreen(
 
 @Composable
 private fun WriteTab(
-    content: String,
-    onContentChange: (String) -> Unit,
+    contentField: TextFieldValue,
+    onContentChange: (TextFieldValue) -> Unit,
     reference: String,
     onReferenceChange: (String) -> Unit,
     tags: String,
-    onTagsChange: (String) -> Unit
+    onTagsChange: (String) -> Unit,
+    charCount: Int,
+    wordCount: Int,
+    maxChars: Int
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier.fillMaxSize()
     ) {
-        // Main content field – largest input
-        OutlinedTextField(
-            value = content,
-            onValueChange = onContentChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Write your thoughts...") },
-            minLines = 12,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = BrandOrange,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                focusedLabelColor = BrandOrange
-            )
-        )
-
-        // Compact reference field
-        OutlinedTextField(
-            value = reference,
-            onValueChange = onReferenceChange,
-            modifier = Modifier.fillMaxWidth(),
-            placeholder = {
-                Text(
-                    "Reference link (optional)",
-                    style = MaterialTheme.typography.bodySmall
+        // Main content area (scrollable)
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .imePadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Main content field
+            OutlinedTextField(
+                value = contentField,
+                onValueChange = onContentChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Write your thoughts...") },
+                minLines = 12,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                    focusedLabelColor = MaterialTheme.colorScheme.primary
                 )
-            },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodySmall,
-            shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = BrandOrange,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                focusedLabelColor = BrandOrange
             )
-        )
 
-        // Compact tags field
-        OutlinedTextField(
-            value = tags,
-            onValueChange = onTagsChange,
+            // Character counter + word count
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "$wordCount words",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "$charCount / ${"%,d".format(maxChars)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = when {
+                        charCount > (maxChars * 0.9).toInt() -> ErrorRed
+                        charCount > (maxChars * 0.75).toInt() -> MaterialTheme.colorScheme.secondary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+            }
+
+            // Compact reference field
+            OutlinedTextField(
+                value = reference,
+                onValueChange = onReferenceChange,
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = {
+                    Text(
+                        "Reference link (optional)",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodySmall,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    focusedLabelColor = MaterialTheme.colorScheme.primary
+                )
+            )
+
+            // Compact tags field
+            OutlinedTextField(
+                value = tags,
+                onValueChange = onTagsChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                placeholder = {
+                    Text(
+                        "Tags, comma separated",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                },
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodySmall,
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                    focusedLabelColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
+
+        // ── Markdown Formatting Toolbar (bottom-anchored, Notesnook-style) ──
+        HorizontalDivider(
+            thickness = 0.5.dp,
+            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+        )
+        MarkdownToolbar(
+            onInsert = { prefix, suffix ->
+                val text = contentField.text
+                val selection = contentField.selection
+                val selectedText = if (selection.length > 0) text.substring(selection.start, selection.end) else ""
+
+                val newText = if (selectedText.isNotEmpty()) {
+                    text.substring(0, selection.start) + prefix + selectedText + suffix + text.substring(selection.end)
+                } else {
+                    text.substring(0, selection.start) + prefix + suffix + text.substring(selection.start)
+                }
+
+                val newCursorPos = if (selectedText.isNotEmpty()) {
+                    selection.start + prefix.length + selectedText.length + suffix.length
+                } else {
+                    selection.start + prefix.length
+                }
+
+                onContentChange(TextFieldValue(newText, TextRange(newCursorPos)))
+            }
+        )
+    }
+}
+
+@Composable
+private fun MarkdownToolbar(
+    onInsert: (prefix: String, suffix: String) -> Unit
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp
+    ) {
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            placeholder = {
-                Text(
-                    "Tags, comma separated",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            },
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodySmall,
-            shape = RoundedCornerShape(10.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = BrandOrange,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                focusedLabelColor = BrandOrange
-            )
-        )
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            // Bold
+            IconButton(onClick = { onInsert("**", "**") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.FormatBold, contentDescription = "Bold", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // Italic
+            IconButton(onClick = { onInsert("*", "*") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.FormatItalic, contentDescription = "Italic", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // Strikethrough
+            IconButton(onClick = { onInsert("~~", "~~") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.FormatStrikethrough, contentDescription = "Strikethrough", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // Heading
+            IconButton(onClick = { onInsert("## ", "") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Title, contentDescription = "Heading", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // Code
+            IconButton(onClick = { onInsert("`", "`") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Code, contentDescription = "Code", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // Quote
+            IconButton(onClick = { onInsert("> ", "") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.FormatQuote, contentDescription = "Quote", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // List
+            IconButton(onClick = { onInsert("- ", "") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.FormatListBulleted, contentDescription = "List", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+            // Link
+            IconButton(onClick = { onInsert("[", "](url)") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Link, contentDescription = "Link", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 
@@ -324,7 +461,7 @@ private fun PreviewTab(content: String) {
                 )
             } else {
                 Text(
-                    text = renderMarkdown(content),
+                    text = renderMarkdownEditor(content),
                     modifier = Modifier.padding(20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
@@ -336,7 +473,7 @@ private fun PreviewTab(content: String) {
 
 // ── Markdown rendering helpers ──────────────────────────────────────────────────
 
-private fun renderMarkdown(markdown: String): AnnotatedString {
+private fun renderMarkdownEditor(markdown: String): AnnotatedString {
     return buildAnnotatedString {
         val lines = markdown.split("\n")
         lines.forEachIndexed { index, line ->
@@ -344,7 +481,7 @@ private fun renderMarkdown(markdown: String): AnnotatedString {
             var isBlockquote = false
 
             if (line.startsWith("#")) {
-                val headingMatch = Regex("^(#+)\\s+(.*)$").find(line)
+                val headingMatch = HEADING_REGEX_EDITOR.find(line)
                 if (headingMatch != null) {
                     isHeading = true
                     val level = headingMatch.groupValues[1].length
@@ -356,42 +493,41 @@ private fun renderMarkdown(markdown: String): AnnotatedString {
                     }
                     pushStyle(
                         SpanStyle(
-                            color = BrandOrange,
                             fontWeight = FontWeight.Bold,
                             fontSize = (18 * sizeMultiplier).sp
                         )
                     )
-                    append(contentText)
+                    appendInlineEditor(contentText)
                     pop()
                 }
             } else if (line.trimStart().startsWith(">")) {
                 isBlockquote = true
                 val contentText = line.replaceFirst(Regex("^\\s*>\\s*"), "")
-                pushStyle(SpanStyle(color = BrandAmber, fontStyle = FontStyle.Italic))
+                pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
                 append("▎ ")
-                appendInline(contentText)
+                appendInlineEditor(contentText)
                 pop()
             }
 
             if (!isHeading && !isBlockquote) {
-                appendInline(line)
+                appendInlineEditor(line)
             }
             if (index < lines.size - 1) append("\n")
         }
     }
 }
 
-private fun AnnotatedString.Builder.appendInline(text: String) {
+private fun AnnotatedString.Builder.appendInlineEditor(text: String) {
     var i = 0
     while (i < text.length) {
+        // Monospace Code `code`
         if (text[i] == '`') {
             val endIdx = text.indexOf('`', i + 1)
             if (endIdx != -1) {
                 pushStyle(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
-                        color = BrandAmber,
-                        background = Color(0x1AFFB000)
+                        background = Color(0x1A4CAF50)
                     )
                 )
                 append(text.substring(i + 1, endIdx))
@@ -400,26 +536,40 @@ private fun AnnotatedString.Builder.appendInline(text: String) {
                 continue
             }
         }
-        if (i + 1 < text.length && text[i] == '*' && text[i + 1] == '*') {
-            val endIdx = text.indexOf("**", i + 2)
+        // Strikethrough ~~text~~
+        if (i + 1 < text.length && text[i] == '~' && text[i+1] == '~') {
+            val endIdx = text.indexOf("~~", i + 2)
             if (endIdx != -1) {
-                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                appendInline(text.substring(i + 2, endIdx))
+                pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
+                appendInlineEditor(text.substring(i + 2, endIdx))
                 pop()
                 i = endIdx + 2
                 continue
             }
         }
+        // Bold **bold** or __bold__
+        if (i + 1 < text.length && text[i] == '*' && text[i+1] == '*') {
+            val endIdx = text.indexOf("**", i + 2)
+            if (endIdx != -1) {
+                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
+                appendInlineEditor(text.substring(i + 2, endIdx))
+                pop()
+                i = endIdx + 2
+                continue
+            }
+        }
+        // Italic *italic*
         if (text[i] == '*') {
             val endIdx = text.indexOf('*', i + 1)
             if (endIdx != -1) {
                 pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                appendInline(text.substring(i + 1, endIdx))
+                appendInlineEditor(text.substring(i + 1, endIdx))
                 pop()
                 i = endIdx + 1
                 continue
             }
         }
+        // Regular character
         append(text[i].toString())
         i++
     }

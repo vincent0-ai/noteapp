@@ -201,24 +201,6 @@ fun AppLockScreen(
                         Text("Unlock App", fontWeight = FontWeight.Bold)
                     }
 
-                    Button(
-                        onClick = {
-                            onRemove()
-                            pin = ""
-                        },
-                        enabled = !isLoading,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
-                    ) {
-                        Text("Remove PIN Protection", fontWeight = FontWeight.Bold)
-                    }
                 } else {
                     Button(
                         onClick = {
