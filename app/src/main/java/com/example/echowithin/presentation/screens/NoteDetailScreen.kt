@@ -505,6 +505,7 @@ private fun renderMarkdown(
     return buildAnnotatedString {
         val lines = markdown.split("\n")
         var inCodeBlock = false
+        var inMathBlock = false
         var i = 0
 
         while (i < lines.size) {
@@ -532,6 +533,37 @@ private fun renderMarkdown(
                         background = secondaryColor.copy(alpha = 0.08f)
                     )
                 )
+                append(line)
+                pop()
+                if (i < lines.size - 1) append("\n")
+                i++
+                continue
+            }
+
+            // Toggle math block state on $$ fences
+            if (line.trim() == "$$") {
+                if (!inMathBlock) {
+                    inMathBlock = true
+                    i++
+                    continue
+                } else {
+                    inMathBlock = false
+                    i++
+                    continue
+                }
+            }
+
+            // Inside math block — render with serif math styling
+            if (inMathBlock) {
+                pushStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        color = primaryColor,
+                        fontSize = 17.sp
+                    )
+                )
+                append("    ") // Indentation
                 append(line)
                 pop()
                 if (i < lines.size - 1) append("\n")
@@ -634,6 +666,42 @@ private fun AnnotatedString.Builder.appendInlineFormatting(
 ) {
     var i = 0
     while (i < text.length) {
+        // Single line block math $$equation$$
+        if (i + 1 < text.length && text[i] == '$' && text[i + 1] == '$') {
+            val endIdx = text.indexOf("$$", i + 2)
+            if (endIdx != -1) {
+                pushStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        color = primaryColor,
+                        fontSize = 17.sp
+                    )
+                )
+                append(text.substring(i + 2, endIdx))
+                pop()
+                i = endIdx + 2
+                continue
+            }
+        }
+
+        // Inline math $equation$
+        if (text[i] == '$') {
+            val endIdx = text.indexOf('$', i + 1)
+            if (endIdx != -1 && endIdx > i + 1) {
+                pushStyle(
+                    SpanStyle(
+                        fontFamily = FontFamily.Serif,
+                        fontStyle = FontStyle.Italic,
+                        color = primaryColor
+                    )
+                )
+                append(text.substring(i + 1, endIdx))
+                pop()
+                i = endIdx + 1
+                continue
+            }
+        }
         // Strikethrough ~~text~~
         if (i + 1 < text.length && text[i] == '~' && text[i + 1] == '~') {
             val endIdx = text.indexOf("~~", i + 2)
