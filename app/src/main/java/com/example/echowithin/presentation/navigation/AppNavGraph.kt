@@ -421,7 +421,12 @@ fun AppNavGraph(
                         }
                         context.startActivity(intent)
                     } catch (_: Exception) {}
-                }
+                },
+                onCheckForUpdates = { notesViewModel.checkForUpdates(context, showToastIfLatest = true) },
+                updateInfo = notesViewModel.uiState.updateInfo,
+                downloadProgress = notesViewModel.uiState.downloadProgress,
+                onConfirmUpdate = { notesViewModel.downloadAndInstallUpdate(context, notesViewModel.uiState.updateInfo?.apkUrl ?: "") },
+                onDismissUpdate = { notesViewModel.dismissUpdate() }
             )
         }
     }

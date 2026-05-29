@@ -47,12 +47,18 @@ class NotesViewModel(
     var uiState by mutableStateOf(NotesUiState())
         private set
 
-    fun checkForUpdates(context: Context) {
+    fun checkForUpdates(context: Context, showToastIfLatest: Boolean = false) {
         viewModelScope.launch {
             val updateManager = com.example.echowithin.data.network.AppUpdateManager(context)
             val info = updateManager.checkForUpdates()
             if (info.hasUpdate) {
                 uiState = uiState.copy(updateInfo = info)
+            } else if (showToastIfLatest) {
+                android.widget.Toast.makeText(
+                    context,
+                    "Your app is up to date! (v${com.example.echowithin.BuildConfig.VERSION_NAME})",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }

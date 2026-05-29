@@ -34,12 +34,27 @@ fun SettingsScreen(
     onLoginClick: () -> Unit,
     onAppLockClick: () -> Unit,
     onWebsiteClick: () -> Unit,
+    onCheckForUpdates: () -> Unit,
+    updateInfo: com.example.echowithin.data.network.UpdateInfo?,
+    downloadProgress: Float?,
+    onConfirmUpdate: () -> Unit,
+    onDismissUpdate: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isLoggedIn = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
     val username = if (isLoggedIn) (SessionManager.username ?: "User") else "Guest User"
     var showSyncDialog by remember { mutableStateOf(false) }
     var currentSyncMode by remember { mutableStateOf(SessionManager.syncMode) }
+
+    if (updateInfo != null) {
+        UpdateDialog(
+            versionName = updateInfo.versionName,
+            changelog = updateInfo.changelog,
+            downloadProgress = downloadProgress,
+            onDismiss = onDismissUpdate,
+            onConfirm = onConfirmUpdate
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -222,12 +237,21 @@ fun SettingsScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                SettingsRowItem(
-                    icon = Icons.Default.Info,
-                    title = "Visit EchoWithin Website",
-                    subtitle = "For communities, surprise themes, and full features visit echowithin.xyz",
-                    onClick = onWebsiteClick
-                )
+                Column {
+                    SettingsRowItem(
+                        icon = Icons.Default.Info,
+                        title = "Visit EchoWithin Website",
+                        subtitle = "For communities, surprise themes, and full features visit echowithin.xyz",
+                        onClick = onWebsiteClick
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    SettingsRowItem(
+                        icon = Icons.Default.Refresh,
+                        title = "Check for Updates",
+                        subtitle = "Verify if a new version is available",
+                        onClick = onCheckForUpdates
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
