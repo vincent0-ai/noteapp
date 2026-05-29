@@ -14,7 +14,8 @@ data class NoteVersionsUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val noteId: String = "",
-    val versions: List<VersionDto> = emptyList()
+    val versions: List<VersionDto> = emptyList(),
+    val restoreSuccess: Boolean = false
 )
 
 class NoteVersionsViewModel(
@@ -24,7 +25,7 @@ class NoteVersionsViewModel(
         private set
 
     fun load(noteId: String) {
-        uiState = uiState.copy(isLoading = true, error = null, noteId = noteId)
+        uiState = uiState.copy(isLoading = true, error = null, noteId = noteId, restoreSuccess = false)
         viewModelScope.launch {
             repository.getVersions(noteId)
                 .onSuccess { versions -> uiState = uiState.copy(isLoading = false, versions = versions) }
@@ -35,12 +36,19 @@ class NoteVersionsViewModel(
     fun restore(versionId: String) {
         val noteId = uiState.noteId
         if (noteId.isBlank()) return
-        uiState = uiState.copy(isLoading = true, error = null)
+        uiState = uiState.copy(isLoading = true, error = null, restoreSuccess = false)
         viewModelScope.launch {
             repository.restoreVersion(noteId, versionId)
-                .onSuccess { load(noteId) }
+                .onSuccess {
+                    uiState = uiState.copy(restoreSuccess = true)
+                    load(noteId)
+                }
                 .onFailure { uiState = uiState.copy(isLoading = false, error = it.message ?: "Could not restore version") }
         }
+    }
+
+    fun clearFeedback() {
+        uiState = uiState.copy(error = null, restoreSuccess = false)
     }
 
     fun decide(versionId: String, approve: Boolean, comment: String = "") {

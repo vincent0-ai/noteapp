@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavGraph.Companion.findStartDestination
 
 @Composable
 fun EchoWithinApp() {
@@ -68,8 +69,11 @@ fun EchoWithinApp() {
                         onClick = {
                             if (currentRoute != AppRoute.Home) {
                                 navController.navigate(AppRoute.Home) {
-                                    popUpTo(AppRoute.Home) { inclusive = false }
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
                         },
@@ -93,7 +97,11 @@ fun EchoWithinApp() {
                         onClick = {
                             if (currentRoute != AppRoute.Search) {
                                 navController.navigate(AppRoute.Search) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
                         },
@@ -117,7 +125,11 @@ fun EchoWithinApp() {
                         onClick = {
                             if (currentRoute != AppRoute.Premium) {
                                 navController.navigate(AppRoute.Premium) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
                         },
@@ -141,7 +153,11 @@ fun EchoWithinApp() {
                         onClick = {
                             if (currentRoute != AppRoute.Settings) {
                                 navController.navigate(AppRoute.Settings) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
                                     launchSingleTop = true
+                                    restoreState = true
                                 }
                             }
                         },

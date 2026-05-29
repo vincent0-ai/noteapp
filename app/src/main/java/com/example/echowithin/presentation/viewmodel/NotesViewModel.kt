@@ -19,6 +19,8 @@ import android.content.Context
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 
 @Immutable
@@ -86,26 +88,63 @@ class NotesViewModel(
         }
     }
 
+    var isInitialDataLoaded = false
+        private set
+
     fun clearLocalData() {
-        repository.clearLocalData()
-        uiState = NotesUiState()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.clearLocalData()
+            }
+            uiState = NotesUiState()
+            isInitialDataLoaded = false
+        }
     }
 
-
-    fun loadNotes() {
-        val localNotes = repository.getLocalNotes()
-        if (localNotes.isNotEmpty()) {
-            uiState = uiState.copy(notes = localNotes, isLoading = false, error = null)
-        } else {
-            uiState = uiState.copy(isLoading = true, error = null)
-        }
+    fun loadAllData() {
+        if (isInitialDataLoaded) return
+        isInitialDataLoaded = true
+        
         viewModelScope.launch {
+            val localNotes = withContext(Dispatchers.IO) {
+                repository.getLocalNotes()
+            }
+            if (localNotes.isNotEmpty()) {
+                uiState = uiState.copy(notes = localNotes, isLoading = false, error = null)
+            } else {
+                uiState = uiState.copy(isLoading = true, error = null)
+            }
+            
             repository.getNotes()
                 .onSuccess { notes ->
                     uiState = uiState.copy(isLoading = false, notes = notes)
                     loadProposals()
                     loadActiveShares()
                     loadNotifications()
+                }
+                .onFailure {
+                    uiState = uiState.copy(isLoading = false)
+                    if (uiState.notes.isEmpty()) {
+                        uiState = uiState.copy(error = it.message ?: "Failed to load notes")
+                    }
+                }
+        }
+    }
+
+    fun loadNotes() {
+        viewModelScope.launch {
+            val localNotes = withContext(Dispatchers.IO) {
+                repository.getLocalNotes()
+            }
+            if (localNotes.isNotEmpty()) {
+                uiState = uiState.copy(notes = localNotes, isLoading = false, error = null)
+            } else {
+                uiState = uiState.copy(isLoading = true, error = null)
+            }
+            
+            repository.getNotes()
+                .onSuccess { notes ->
+                    uiState = uiState.copy(isLoading = false, notes = notes)
                 }
                 .onFailure {
                     uiState = uiState.copy(isLoading = false)

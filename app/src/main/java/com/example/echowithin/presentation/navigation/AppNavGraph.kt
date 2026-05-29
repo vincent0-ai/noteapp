@@ -65,6 +65,7 @@ fun AppNavGraph(
 
     // Validate session then load data on launch
     LaunchedEffect(Unit) {
+        if (notesViewModel.isInitialDataLoaded) return@LaunchedEffect
         notesViewModel.checkForUpdates(context)
         if (SessionManager.token != null) {
             try {
@@ -97,7 +98,7 @@ fun AppNavGraph(
                     SessionManager.accountTier = profile.account_tier
                 } catch (_: Exception) { }
                 // Session confirmed — now it's safe to load notes and lock status
-                notesViewModel.loadNotes()
+                notesViewModel.loadAllData()
                 appLockViewModel.refreshStatus()
             } catch (e: retrofit2.HttpException) {
                 if (e.code() == 401 || e.code() == 403) {
@@ -143,7 +144,7 @@ fun AppNavGraph(
             LoginScreen(
                 viewModel = authViewModel,
                 onLoginSuccess = {
-                    notesViewModel.loadNotes()
+                    notesViewModel.loadAllData()
                     appLockViewModel.refreshStatus()
                     navController.navigate(AppRoute.Home) {
                         popUpTo(AppRoute.Login) { inclusive = true }
@@ -377,7 +378,8 @@ fun AppNavGraph(
                 uiState = versionsViewModel.uiState,
                 onBack = { navController.popBackStack() },
                 onRestore = { versionsViewModel.restore(it) },
-                onDecide = { versionId, approve -> versionsViewModel.decide(versionId, approve) }
+                onDecide = { versionId, approve -> versionsViewModel.decide(versionId, approve) },
+                onClearFeedback = { versionsViewModel.clearFeedback() }
             )
         }
 

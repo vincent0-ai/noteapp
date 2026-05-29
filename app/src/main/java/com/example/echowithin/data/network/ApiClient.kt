@@ -16,12 +16,16 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
 
 object ApiClient {
     /** Set by the Compose navigation layer. Invoked on any HTTP 401 response. */
     var onUnauthorized: (() -> Unit)? = null
 
     val isHandlingUnauthorized = AtomicBoolean(false)
+
+    @Volatile
+    private var lastUnauthorizedTime = 0L
 
     private interface ClearableCookieJar : CookieJar {
         fun clear()
@@ -157,10 +161,13 @@ object ApiClient {
 
     private val httpClient: OkHttpClient by lazy {
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
+            level = HttpLoggingInterceptor.Level.BASIC
         }
 
         OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .writeTimeout(15, TimeUnit.SECONDS)
             .cookieJar(persistentCookieJar)
             .addInterceptor { chain ->
                 val originalRequest = chain.request()
@@ -180,7 +187,16 @@ object ApiClient {
                 
                 // Detect 401 Unauthorized → invoke callback to clear session & redirect
                 if (response.code == 401 && !isAuthEndpoint) {
-                    if (isHandlingUnauthorized.compareAndSet(false, true)) {
+                    val now = System.currentTimeMillis()
+                    val shouldTrigger = synchronized(this) {
+                        if (now - lastUnauthorizedTime > 5000L) {
+                            lastUnauthorizedTime = now
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    if (shouldTrigger) {
                         onUnauthorized?.invoke()
                     }
                 }
