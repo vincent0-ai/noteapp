@@ -474,8 +474,10 @@ fun NoteDetailScreen(
                     }
                 }
 
-                // Quick Actions Row — secondary actions (Sync / Lock / Delete)
-                // that complement the sticky bottom bar.
+                // Quick Actions Row — secondary actions (Sync / History /
+                // Delete) that complement the sticky bottom bar. Kept
+                // inline so the most-used actions (Edit / Copy / Share /
+                // Lock) get the always-visible bottom row.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -502,21 +504,19 @@ fun NoteDetailScreen(
                             }
                         }
                     }
-                    IconButton(onClick = {
-                        val isGuest = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()
-                        val isFree = com.example.echowithin.data.network.SessionManager.accountTier == "free"
-                        if (isGuest || isFree) {
-                            android.widget.Toast.makeText(context, "Upgrade to Premium to lock notes!", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            onToggleLock { newLocked ->
-                                noteState = noteState?.copy(isLocked = newLocked)
+                    IconButton(
+                        onClick = {
+                            if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
+                                android.widget.Toast.makeText(context, "Sign in to view versions", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                onVersions()
                             }
                         }
-                    }) {
+                    ) {
                         Icon(
-                            if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
-                            contentDescription = "Toggle Lock",
-                            tint = if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant
+                            imageVector = Icons.Default.History,
+                            contentDescription = "Version history",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = { showDeleteDialog = true }) {
@@ -527,10 +527,13 @@ fun NoteDetailScreen(
 
                 // ── Sticky bottom action bar ──
                 // The reading surface scrolls freely above. A bottom-anchored
-                // surface always shows the primary actions (Edit / Copy /
-                // Share / History) so the user can reach them no matter how
-                // far they have scrolled into the note. Secondary actions
-                // (Sync / Lock / Delete) remain in the inline row above.
+                // surface always shows the four primary actions (Edit / Copy
+                // / Share / Lock) so the user can reach them no matter how
+                // far they have scrolled into the note. Lock used to be in
+                // the inline row where it was easy to miss — promoting it
+                // here makes the protection affordance discoverable and
+                // also makes the lock icon change (open/closed) immediately
+                // visible as the user toggles it.
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -542,7 +545,7 @@ fun NoteDetailScreen(
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
@@ -585,16 +588,41 @@ fun NoteDetailScreen(
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
-                                if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
-                                    android.widget.Toast.makeText(context, "Sign in to view versions", android.widget.Toast.LENGTH_SHORT).show()
+                                val isGuest = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()
+                                val isFree = com.example.echowithin.data.network.SessionManager.accountTier == "free"
+                                if (isGuest || isFree) {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Upgrade to Premium to lock notes!",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
                                 } else {
-                                    onVersions()
+                                    onToggleLock { newLocked ->
+                                        noteState = noteState?.copy(isLocked = newLocked)
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            if (newLocked) "Note locked" else "Note unlocked",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
                                 }
-                            }
+                            },
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                contentColor = if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary
+                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                            )
                         ) {
-                            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(
+                                if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
                             androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                            Text("History")
+                            Text(if (noteState?.isLocked == true) "Locked" else "Lock", fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }

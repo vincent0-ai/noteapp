@@ -24,16 +24,23 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.platform.LocalContext
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.example.echowithin.data.network.NetworkMonitor
 
 @Composable
 fun EchoWithinApp() {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = viewModel(factory = AuthViewModel.factory())
     val notesViewModel: NotesViewModel = viewModel(factory = NotesViewModel.factory())
+    val context = LocalContext.current
+
+    // Register the network monitor as early as possible so the very first
+    // frame already shows the correct offline/online state.
+    LaunchedEffect(Unit) { NetworkMonitor.ensureRegistered(context) }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     

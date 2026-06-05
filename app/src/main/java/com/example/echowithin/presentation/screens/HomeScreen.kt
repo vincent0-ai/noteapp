@@ -83,11 +83,16 @@ fun HomeScreen(
     notifications: List<NotificationDto> = emptyList(),
     unreadNotificationsCount: Int = 0,
     onMarkAllRead: () -> Unit = {},
+    markingAllRead: Boolean = false,
     // Update-related
     updateInfo: com.example.echowithin.data.network.UpdateInfo? = null,
     downloadProgress: Float? = null,
     onConfirmUpdate: () -> Unit = {},
     onDismissUpdate: () -> Unit = {},
+    // Offline / sync
+    isOnline: Boolean = true,
+    pendingSyncCount: Int = 0,
+    lastSyncedAt: Long = 0L,
     // Navigation
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -113,6 +118,18 @@ fun HomeScreen(
             TopAppBar(
                 title = { EchoWithinTopBarTitle() },
                 actions = {
+                    // "Last synced Xm ago" — only when we actually have a
+                    // timestamp and we're online. Cheap reassurance that
+                    // the device is up to date.
+                    if (lastSyncedAt > 0L && isOnline) {
+                        Text(
+                            text = "Synced ${formatLastSynced(lastSyncedAt)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            maxLines = 1
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     if (isSyncing) {
                         CircularProgressIndicator(
                             color = MaterialTheme.colorScheme.primary,
@@ -124,7 +141,8 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Sync Notes",
-                                tint = MaterialTheme.colorScheme.onSurface
+                                tint = if (isOnline) MaterialTheme.colorScheme.onSurface
+                                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
@@ -157,6 +175,14 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Offline banner — slides down when we lose connectivity.
+            // Tapping "Retry" fires the same onSyncClick as the top bar.
+            com.example.echowithin.presentation.components.OfflineBanner(
+                visible = !isOnline,
+                pendingChanges = pendingSyncCount,
+                onRetry = onSyncClick
+            )
+
             // Tab Row
             ScrollableTabRow(
                 selectedTabIndex = activeTab.ordinal,
@@ -225,7 +251,8 @@ fun HomeScreen(
                     unreadNotificationsCount = unreadNotificationsCount,
                     onApproveProposal = onApproveProposal,
                     onRejectProposal = onRejectProposal,
-                    onMarkAllRead = onMarkAllRead
+                    onMarkAllRead = onMarkAllRead,
+                    markingAllRead = markingAllRead
                 )
                 HomeTab.SHARED_LINKS -> SharedLinksTabContent(
                     activeShares = activeShares,
@@ -596,7 +623,8 @@ private fun ActivityTabContent(
     unreadNotificationsCount: Int,
     onApproveProposal: (String) -> Unit,
     onRejectProposal: (String) -> Unit,
-    onMarkAllRead: () -> Unit
+    onMarkAllRead: () -> Unit,
+    markingAllRead: Boolean = false
 ) {
     val hasContent = proposals.isNotEmpty() || notifications.isNotEmpty()
 
@@ -634,20 +662,38 @@ private fun ActivityTabContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
             ) {
-                // Mark all read button
-                if (unreadNotificationsCount > 0) {
+                // Mark all read row: shows a spinner while the request is
+                // in flight so the tap is never silently dropped, and
+                // hides itself the moment the badge clears.
+                if (unreadNotificationsCount > 0 || markingAllRead) {
                     item(key = "mark_all_read") {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            TextButton(onClick = onMarkAllRead) {
-                                Text(
-                                    text = "Mark all as read",
+                            if (markingAllRead) {
+                                CircularProgressIndicator(
                                     color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Marking as read…",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = FontWeight.Medium,
                                     style = MaterialTheme.typography.labelMedium
                                 )
+                            } else {
+                                TextButton(onClick = onMarkAllRead) {
+                                    Text(
+                                        text = "Mark all as read",
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
                             }
                         }
                     }
@@ -1257,18 +1303,18 @@ private fun formatRelativeTime(timestamp: String): String {
                 } catch (_: Exception) {}
             }
         }
-        
+
         if (date == null) {
             if (timestamp.length >= 10) return timestamp.take(10)
             return timestamp
         }
-        
+
         val diffMs = System.currentTimeMillis() - date!!.time
         val diffSec = diffMs / 1000
         val diffMin = diffSec / 60
         val diffHour = diffMin / 60
         val diffDay = diffHour / 24
-        
+
         return when {
             diffMs < 0 -> "Just now"
             diffSec < 60 -> "Just now"
@@ -1284,6 +1330,21 @@ private fun formatRelativeTime(timestamp: String): String {
         }
     } catch (e: Exception) {
         return timestamp.take(10)
+    }
+}
+
+/**
+ * Compact "X ago" formatter used in the top app bar's "Synced 5m ago" pill.
+ * Caps at "now" for sub-minute deltas, never shows seconds.
+ */
+private fun formatLastSynced(epochMillis: Long): String {
+    if (epochMillis <= 0L) return ""
+    val diffSec = (System.currentTimeMillis() - epochMillis) / 1000
+    return when {
+        diffSec < 60 -> "now"
+        diffSec < 3600 -> "${diffSec / 60}m ago"
+        diffSec < 86_400 -> "${diffSec / 3600}h ago"
+        else -> "${diffSec / 86_400}d ago"
     }
 }
 

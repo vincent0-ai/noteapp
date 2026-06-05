@@ -148,6 +148,10 @@ class FakeEchoWithinApiService : EchoWithinApiService {
         return SharesListDto(shares = emptyList())
     }
 
+    override suspend fun getActiveShares(): ActiveSharesResponseDto {
+        return ActiveSharesResponseDto(shares = emptyList(), count = 0)
+    }
+
     override suspend fun revokeShare(shareId: String): GenericResponse {
         return GenericResponse(success = true)
     }

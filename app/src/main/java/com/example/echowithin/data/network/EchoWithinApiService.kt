@@ -68,6 +68,9 @@ interface EchoWithinApiService {
         @Part valentineAudio: MultipartBody.Part?
     ): ShareResponseDto
 
+    @GET("api/v1/notes/shares")
+    suspend fun getActiveShares(): ActiveSharesResponseDto
+
     @GET("api/v1/notes/shares/{noteId}")
     suspend fun getShares(@Path("noteId") noteId: String): SharesListDto
 

@@ -1,5 +1,8 @@
 package com.example.echowithin.presentation.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -11,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -36,6 +40,24 @@ fun AppLockScreen(
     modifier: Modifier = Modifier
 ) {
     var pin by remember { mutableStateOf("") }
+    val shakeOffset = remember { Animatable(0f) }
+    var lastErrorSignature by remember { mutableStateOf<String?>(null) }
+
+    // Shake the whole content column every time a new error arrives. We
+    // dedupe by content so repeated recompositions (e.g. a state update
+    // that doesn't change the error) don't keep re-firing the animation.
+    LaunchedEffect(error) {
+        if (!error.isNullOrBlank() && error != lastErrorSignature) {
+            lastErrorSignature = error
+            // 4 oscillations, 70dp amplitude — visible but not vomit-inducing.
+            val sequence = listOf(70f, -70f, 50f, -50f, 30f, -30f, 0f)
+            for (x in sequence) {
+                shakeOffset.animateTo(x, tween(durationMillis = 55, easing = FastOutSlowInEasing))
+            }
+        } else if (error == null) {
+            lastErrorSignature = null
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -53,7 +75,8 @@ fun AppLockScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(24.dp)
+                .graphicsLayer { translationX = shakeOffset.value },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
@@ -118,7 +141,11 @@ fun AppLockScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                    border = BorderStroke(
+                        1.dp,
+                        if (error != null) ErrorRed.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    ),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
                 ) {
                     Column(
@@ -138,18 +165,21 @@ fun AppLockScreen(
                             visualTransformation = PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
+                            isError = error != null,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = BrandOrange,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                focusedLabelColor = BrandOrange
+                                focusedBorderColor = if (error != null) ErrorRed else BrandOrange,
+                                unfocusedBorderColor = if (error != null) ErrorRed.copy(alpha = 0.5f)
+                                                          else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                focusedLabelColor = if (error != null) ErrorRed else BrandOrange
                             )
                         )
 
                         if (error != null) {
                             Text(
                                 text = error,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
+                                color = ErrorRed,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
 

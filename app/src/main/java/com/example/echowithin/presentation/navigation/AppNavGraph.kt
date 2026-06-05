@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.NavHostController
@@ -12,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.echowithin.data.network.ApiClient
+import com.example.echowithin.data.network.NetworkMonitor
 import com.example.echowithin.data.network.SessionManager
 import com.example.echowithin.presentation.screens.AppLockScreen
 import com.example.echowithin.presentation.screens.LoginScreen
@@ -193,6 +197,33 @@ fun AppNavGraph(
         }
 
         composable(AppRoute.Home) {
+            // Listen for connectivity changes and auto-sync when we come
+            // back online. We collect the StateFlow here (in the composable
+            // scope) so the LaunchedEffect re-fires only when the value
+            // actually changes — not on every recomposition.
+            val isOnlineState = remember { NetworkMonitor.isOnline }.collectAsState()
+            val isOnline = isOnlineState.value
+            LaunchedEffect(isOnline) {
+                notesViewModel.onConnectivityChanged(isOnline)
+            }
+            // Auto-sync when the view-model pings the trigger (debounced
+            // reconnect logic). Pull the value into a local so
+            // collectAsState() subscribes us to updates.
+            val syncTriggerState = notesViewModel.syncTrigger.collectAsState()
+            val syncTrigger = syncTriggerState.value
+            LaunchedEffect(syncTrigger) {
+                if (syncTrigger > 0L && isOnline) {
+                    notesViewModel.syncNotes()
+                }
+            }
+            // Ephemeral toasts (mark-all-read cleared, sync done, etc.)
+            val ephemeral = notesViewModel.ephemeralMessage
+            LaunchedEffect(ephemeral) {
+                if (!ephemeral.isNullOrBlank()) {
+                    android.widget.Toast.makeText(context, ephemeral, android.widget.Toast.LENGTH_SHORT).show()
+                    notesViewModel.consumeEphemeralMessage()
+                }
+            }
             HomeScreen(
                 notes = notesViewModel.uiState.notes,
                 isLoading = notesViewModel.uiState.isLoading,
@@ -244,6 +275,11 @@ fun AppNavGraph(
                 notifications = notesViewModel.uiState.notifications,
                 unreadNotificationsCount = notesViewModel.uiState.unreadNotificationsCount,
                 onMarkAllRead = { notesViewModel.markAllNotificationsAsRead() },
+                markingAllRead = notesViewModel.uiState.markingAllRead,
+                // Offline + sync state
+                isOnline = isOnline,
+                pendingSyncCount = notesViewModel.uiState.pendingSyncCount,
+                lastSyncedAt = notesViewModel.uiState.lastSyncedAt,
                 // Update-related
                 updateInfo = notesViewModel.uiState.updateInfo,
                 downloadProgress = notesViewModel.uiState.downloadProgress,

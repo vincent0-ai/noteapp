@@ -122,6 +122,24 @@ data class SharesListDto(
     val shares: List<ShareDto> = emptyList()
 )
 
+data class ActiveShareDto(
+    val share_id: String,
+    val note_id: String? = null,
+    val note_title: String = "Untitled note",
+    val permissions: String = "view",
+    val surprise_theme: String = "none",
+    val use_typewriter: Boolean = false,
+    val auto_approve: Boolean = false,
+    val created_at: String? = null,
+    val expires_at: String? = null,
+    val has_password: Boolean = false
+)
+
+data class ActiveSharesResponseDto(
+    val shares: List<ActiveShareDto> = emptyList(),
+    val count: Int = 0
+)
+
 data class CommentDto(
     val id: String,
     val author_name: String = "Unknown",

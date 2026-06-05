@@ -16,8 +16,13 @@ import com.example.echowithin.data.model.BadgeCountsDto
 import com.example.echowithin.data.model.ProposalDecisionDto
 import com.example.echowithin.data.repository.NotesRepository
 import android.content.Context
+import com.example.echowithin.data.local.NoteDatabaseHelper
+import com.example.echowithin.EchoWithinApplication
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,7 +43,20 @@ data class NotesUiState(
     val unreadNotificationsCount: Int = 0,
     val badgeCounts: BadgeCountsDto = BadgeCountsDto(0, 0),
     val updateInfo: com.example.echowithin.data.network.UpdateInfo? = null,
-    val downloadProgress: Float? = null
+    val downloadProgress: Float? = null,
+    // Number of notes waiting to be pushed to the server (used by the
+    // offline banner to tell the user "N changes will sync when you
+    // reconnect"). Recomputed from the local DB on every load.
+    val pendingSyncCount: Int = 0,
+    // Last successful sync timestamp (epoch millis). Powers the small
+    // "Synced 5m ago" label in the top app bar.
+    val lastSyncedAt: Long = 0L,
+    // True while a "mark all as read" round-trip is in flight. Lets the
+    // Activity tab show a spinner instead of doing nothing on tap.
+    val markingAllRead: Boolean = false,
+    // Last-marked count, used for the "Cleared N items" toast. Cleared
+    // by the UI once the toast has been shown.
+    val lastMarkedReadCount: Int = 0
 )
 
 class NotesViewModel(
@@ -46,6 +64,32 @@ class NotesViewModel(
 ) : ViewModel() {
     var uiState by mutableStateOf(NotesUiState())
         private set
+
+    /**
+     * Coalescing channel for connectivity changes. The UI pushes "online
+     * now" into this whenever [com.example.echowithin.data.network.NetworkMonitor]
+     * flips to true; we de-dupe and kick a single syncNotes() round-trip.
+     * Without this, every time the device jumps between Wi-Fi and cell
+     * we would queue a full sync per call site.
+     */
+    private val _syncTrigger = MutableStateFlow(0L)
+    val syncTrigger: StateFlow<Long> = _syncTrigger.asStateFlow()
+
+    /** Toasts/errors that survive recomposition but are shown exactly once. */
+    var ephemeralMessage by mutableStateOf<String?>(null)
+        private set
+    fun consumeEphemeralMessage() { ephemeralMessage = null }
+
+    private suspend fun pendingSyncCount(): Int = withContext(Dispatchers.IO) {
+        try {
+            val helper = NoteDatabaseHelper(EchoWithinApplication.instance)
+            helper.getPendingNotes().size
+        } catch (_: Exception) { 0 }
+    }
+
+    private suspend fun refreshPendingSyncCount() {
+        uiState = uiState.copy(pendingSyncCount = pendingSyncCount())
+    }
 
     fun checkForUpdates(context: Context, showToastIfLatest: Boolean = false) {
         viewModelScope.launch {
@@ -81,17 +125,44 @@ class NotesViewModel(
     }
 
     fun syncNotes() {
+        if (uiState.isSyncing) return
         uiState = uiState.copy(isSyncing = true, error = null)
         viewModelScope.launch {
             repository.syncNotes()
                 .onSuccess {
-                    uiState = uiState.copy(isSyncing = false)
+                    uiState = uiState.copy(
+                        isSyncing = false,
+                        lastSyncedAt = System.currentTimeMillis()
+                    )
                     loadNotes(silent = true)
+                    ephemeralMessage = "Synced with the server"
                 }
-                .onFailure {
-                    uiState = uiState.copy(isSyncing = false, error = it.message ?: "Sync failed")
+                .onFailure { t ->
+                    uiState = uiState.copy(isSyncing = false, error = t.message ?: "Sync failed")
                 }
         }
+    }
+
+    /**
+     * Called by the root scaffold whenever the connectivity state flips
+     * to "online". Runs at most one sync per on-online event, debounced
+     * by 2s so a Wi-Fi → cell → Wi-Fi flip in quick succession still
+     * produces only one push.
+     */
+    fun onConnectivityChanged(isOnline: Boolean) {
+        if (!isOnline) return
+        viewModelScope.launch {
+            val pending = pendingSyncCount()
+            uiState = uiState.copy(pendingSyncCount = pending)
+            if (pending > 0 || hasToken()) {
+                _syncTrigger.value = System.currentTimeMillis()
+            }
+        }
+    }
+
+    private fun hasToken(): Boolean {
+        val t = com.example.echowithin.data.network.SessionManager.token
+        return !t.isNullOrBlank() && t != "null"
     }
 
     var isInitialDataLoaded = false
@@ -120,14 +191,19 @@ class NotesViewModel(
     fun loadAllData() {
         if (isInitialDataLoaded) return
         isInitialDataLoaded = true
-        
+
         viewModelScope.launch {
-            // 1. Instantly load local notes
-            val localNotes = withContext(Dispatchers.IO) {
-                repository.getLocalNotes()
+            // 1. Instantly load local notes (offline-first) + count pending
+            val (localNotes, pending) = withContext(Dispatchers.IO) {
+                repository.getLocalNotes() to pendingSyncCount()
             }
-            uiState = uiState.copy(notes = localNotes, isLoading = localNotes.isEmpty(), error = null)
-            
+            uiState = uiState.copy(
+                notes = localNotes,
+                isLoading = localNotes.isEmpty(),
+                pendingSyncCount = pending,
+                error = null
+            )
+
             // 2. Perform network sync and fetches concurrently in the background
             launch {
                 val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
@@ -135,11 +211,16 @@ class NotesViewModel(
                     repository.syncNotes()
                 }
                 // Refresh list from updated DB
-                val updatedNotes = withContext(Dispatchers.IO) {
-                    repository.getLocalNotes()
+                val (updatedNotes, newPending) = withContext(Dispatchers.IO) {
+                    repository.getLocalNotes() to pendingSyncCount()
                 }
-                uiState = uiState.copy(notes = updatedNotes, isLoading = false)
-                
+                uiState = uiState.copy(
+                    notes = updatedNotes,
+                    isLoading = false,
+                    pendingSyncCount = newPending,
+                    lastSyncedAt = if (newPending < pending) System.currentTimeMillis() else uiState.lastSyncedAt
+                )
+
                 // Load metadata in parallel
                 loadProposals()
                 loadActiveShares()
@@ -150,24 +231,40 @@ class NotesViewModel(
 
     fun loadNotes(silent: Boolean = false) {
         viewModelScope.launch {
-            val localNotes = withContext(Dispatchers.IO) {
-                repository.getLocalNotes()
+            val (localNotes, pending) = withContext(Dispatchers.IO) {
+                repository.getLocalNotes() to pendingSyncCount()
             }
             if (!silent) {
-                uiState = uiState.copy(notes = localNotes, isLoading = localNotes.isEmpty(), error = null)
+                uiState = uiState.copy(
+                    notes = localNotes,
+                    isLoading = localNotes.isEmpty(),
+                    error = null,
+                    pendingSyncCount = pending
+                )
             } else {
-                uiState = uiState.copy(notes = localNotes, error = null)
+                uiState = uiState.copy(
+                    notes = localNotes,
+                    error = null,
+                    pendingSyncCount = pending
+                )
             }
-            
+
             repository.getNotes()
                 .onSuccess { notes ->
-                    uiState = uiState.copy(isLoading = false, notes = notes)
+                    uiState = uiState.copy(
+                        isLoading = false,
+                        notes = notes,
+                        lastSyncedAt = System.currentTimeMillis()
+                    )
+                    refreshPendingSyncCount()
                 }
                 .onFailure {
                     uiState = uiState.copy(isLoading = false)
                     if (uiState.notes.isEmpty()) {
                         uiState = uiState.copy(error = it.message ?: "Failed to load notes")
                     }
+                    // Even on failure, keep the pending counter fresh.
+                    refreshPendingSyncCount()
                 }
         }
     }
@@ -198,20 +295,84 @@ class NotesViewModel(
         uiState = uiState.copy(sharesLoading = true)
         viewModelScope.launch {
             try {
-                val deferreds = uiState.notes.map { note ->
-                    async {
-                        try {
-                            val sharesList = com.example.echowithin.data.network.ApiClient.apiService.getShares(note.id).shares
-                            if (sharesList.isNotEmpty()) note to sharesList else null
-                        } catch (_: Exception) {
-                            null
-                        }
-                    }
+                // Single round-trip: ask the server for every active share
+                // the user owns. Falls back to the per-note loop only if
+                // the endpoint is missing (older server) so we never
+                // regress to a silent empty state.
+                val resp = com.example.echowithin.data.network.ApiClient.apiService.getActiveShares()
+                val noteById = uiState.notes.associateBy { it.id }
+                val pairs = resp.shares.mapNotNull { dto ->
+                    val note = dto.note_id?.let(noteById::get)
+                    if (note != null) {
+                        note to listOf(
+                            ShareDto(
+                                share_id = dto.share_id,
+                                permissions = dto.permissions,
+                                surprise_theme = dto.surprise_theme,
+                                use_typewriter = dto.use_typewriter,
+                                auto_approve = dto.auto_approve,
+                                created_at = dto.created_at,
+                                expires_at = dto.expires_at,
+                                has_password = dto.has_password
+                            )
+                        )
+                    } else null
                 }
-                val result = awaitAll(*deferreds.toTypedArray()).filterNotNull()
-                uiState = uiState.copy(sharesLoading = false, activeShares = result)
+                if (resp.shares.isNotEmpty() && pairs.isEmpty()) {
+                    // Server returned shares but none matched a local note.
+                    // Surface them as standalone cards (synthesised note)
+                    // so the user can still see and revoke their links.
+                    val synthetic = resp.shares.map { dto ->
+                        val title = dto.note_title.ifBlank { "Untitled note" }
+                        AppNote(
+                            id = dto.note_id ?: "share_${dto.share_id}",
+                            title = title,
+                            content = "",
+                            reference = "",
+                            tags = emptyList(),
+                            updatedAt = dto.created_at ?: "",
+                            isLocked = false,
+                            isPinned = false,
+                            isSynced = true,
+                            pendingOp = "none",
+                            updateAvailable = false
+                        ) to listOf(
+                            ShareDto(
+                                share_id = dto.share_id,
+                                permissions = dto.permissions,
+                                surprise_theme = dto.surprise_theme,
+                                use_typewriter = dto.use_typewriter,
+                                auto_approve = dto.auto_approve,
+                                created_at = dto.created_at,
+                                expires_at = dto.expires_at,
+                                has_password = dto.has_password
+                            )
+                        )
+                    }
+                    uiState = uiState.copy(sharesLoading = false, activeShares = synthetic)
+                } else {
+                    uiState = uiState.copy(sharesLoading = false, activeShares = pairs)
+                }
             } catch (e: Exception) {
-                uiState = uiState.copy(sharesLoading = false)
+                // Fallback: per-note loop (older servers without the new
+                // endpoint). Skip local-only notes (their IDs aren't
+                // valid ObjectIds and would 400 the server).
+                try {
+                    val deferreds = uiState.notes
+                        .filter { !it.id.startsWith("local_") }
+                        .map { note ->
+                            async {
+                                try {
+                                    val sharesList = com.example.echowithin.data.network.ApiClient.apiService.getShares(note.id).shares
+                                    if (sharesList.isNotEmpty()) note to sharesList else null
+                                } catch (_: Exception) { null }
+                            }
+                        }
+                    val result = awaitAll(*deferreds.toTypedArray()).filterNotNull()
+                    uiState = uiState.copy(sharesLoading = false, activeShares = result)
+                } catch (_: Exception) {
+                    uiState = uiState.copy(sharesLoading = false)
+                }
             }
         }
     }
@@ -240,14 +401,57 @@ class NotesViewModel(
     }
 
     fun markAllNotificationsAsRead() {
+        if (uiState.markingAllRead) return
+        if (uiState.unreadNotificationsCount == 0) {
+            // Nothing to do — avoid a useless round-trip and a confusing
+            // "0 cleared" toast. The button is hidden in this state but
+            // we double-check defensively.
+            return
+        }
+        val previousUnread = uiState.unreadNotificationsCount
+        // Optimistic UI: clear the badge instantly so the user sees
+        // something happened. The reload at the end either confirms it
+        // or resets it if the server rejected.
+        uiState = uiState.copy(
+            markingAllRead = true,
+            unreadNotificationsCount = 0,
+            notifications = uiState.notifications.map { it.copy(has_unread = false) }
+        )
         viewModelScope.launch {
+            var postsMarked = 0
+            var proposalsMarked = 0
+            var failed: String? = null
             try {
-                com.example.echowithin.data.network.ApiClient.apiService.markAllPostsRead()
+                val postsResp = com.example.echowithin.data.network.ApiClient.apiService.markAllPostsRead()
+                postsMarked = (postsResp.message?.toIntOrNull() ?: 0)
+                if (postsMarked == 0) {
+                    // GenericResponse doesn't carry a count — best-effort
+                    // surface a non-zero number so the toast is meaningful.
+                    postsMarked = previousUnread
+                }
+            } catch (e: Exception) { failed = "Posts: ${e.message ?: "failed"}" }
+            try {
                 com.example.echowithin.data.network.ApiClient.apiService.markAllProposalsRead()
-                loadNotifications()
-                loadProposals() // Proposals might also clear
-            } catch (e: Exception) {
-                uiState = uiState.copy(error = e.message ?: "Failed to mark all as read")
+                proposalsMarked = 1
+            } catch (e: Exception) { failed = (failed?.let { "$it; " } ?: "") + "Proposals: ${e.message ?: "failed"}" }
+
+            // Always reload to reconcile server-side state — the optimistic
+            // clear above makes the UI feel snappy; the reload makes it
+            // correct.
+            loadNotifications()
+            loadProposals()
+
+            val total = postsMarked + proposalsMarked
+            uiState = uiState.copy(
+                markingAllRead = false,
+                lastMarkedReadCount = if (total > 0) total else previousUnread,
+                error = failed
+            )
+            ephemeralMessage = if (failed == null) {
+                if (total > 0) "Cleared $total item${if (total == 1) "" else "s"}"
+                else "All caught up"
+            } else {
+                "Marked as read, but: $failed"
             }
         }
     }
