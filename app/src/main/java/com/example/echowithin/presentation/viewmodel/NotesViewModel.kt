@@ -136,6 +136,16 @@ class NotesViewModel(
                     )
                     loadNotes(silent = true)
                     ephemeralMessage = "Synced with the server"
+                    // One-shot dedup of any duplicates that piled up before
+                    // the v1.7.1 sync-flag fix. Server endpoint is a no-op
+                    // when there are no duplicates, so it's safe to call
+                    // every sync — but we only surface a toast when it
+                    // actually cleaned something up.
+                    val removed = repository.dedupNotesOnServer()
+                    if (removed > 0) {
+                        loadNotes(silent = true)
+                        ephemeralMessage = "Cleaned up $removed duplicate note${if (removed == 1) "" else "s"} from a previous sync"
+                    }
                 }
                 .onFailure { t ->
                     uiState = uiState.copy(isSyncing = false, error = t.message ?: "Sync failed")

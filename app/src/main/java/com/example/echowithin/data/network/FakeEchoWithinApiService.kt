@@ -240,4 +240,5 @@ class FakeEchoWithinApiService : EchoWithinApiService {
     override suspend fun getNotifications(): NotificationsResponseDto = NotificationsResponseDto()
     override suspend fun markAllPostsRead(): GenericResponse = GenericResponse(success = true)
     override suspend fun markAllProposalsRead(): GenericResponse = GenericResponse(success = true)
+    override suspend fun dedupNotes(confirm: Boolean): DedupResponseDto = DedupResponseDto(success = true)
 }

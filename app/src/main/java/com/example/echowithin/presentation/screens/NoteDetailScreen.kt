@@ -545,20 +545,23 @@ fun NoteDetailScreen(
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
                         androidx.compose.material3.FilledTonalButton(
                             onClick = onEdit,
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
                             colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 contentColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                            Text("Edit", fontWeight = FontWeight.SemiBold)
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
+                            Text("Edit", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
@@ -567,11 +570,14 @@ fun NoteDetailScreen(
                                     clipboardManager.setText(AnnotatedString(rawText))
                                     android.widget.Toast.makeText(context, "Note copied", android.widget.Toast.LENGTH_SHORT).show()
                                 }
-                            }
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
                         ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                            Text("Copy")
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
+                            Text("Copy", fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
@@ -580,11 +586,14 @@ fun NoteDetailScreen(
                                 } else {
                                     onShare()
                                 }
-                            }
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                            Text("Share")
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
+                            Text("Share", fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
@@ -607,6 +616,9 @@ fun NoteDetailScreen(
                                     }
                                 }
                             },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
                             colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                                 contentColor = if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
                             ),
@@ -619,10 +631,16 @@ fun NoteDetailScreen(
                             Icon(
                                 if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
-                            Text(if (noteState?.isLocked == true) "Locked" else "Lock", fontWeight = FontWeight.SemiBold)
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                if (noteState?.isLocked == true) "Locked" else "Lock",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }

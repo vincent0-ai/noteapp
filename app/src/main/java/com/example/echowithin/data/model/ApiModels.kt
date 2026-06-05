@@ -301,3 +301,22 @@ data class SyncNoteResponse(
     val message: String? = null,
     val error: String? = null
 )
+
+/**
+ * Response from POST /api/v1/notes/dedup — a one-shot duplicate-note cleanup
+ * helper for users who accumulated duplicates from a pre-v1.7.1 sync bug.
+ */
+data class DedupResponseDto(
+    val success: Boolean = false,
+    val removed_count: Int = 0,
+    val kept_count: Int = 0,
+    val dry_run: Boolean = false,
+    val groups: List<DedupGroupDto> = emptyList(),
+    val error: String? = null
+)
+
+data class DedupGroupDto(
+    val kept_id: String = "",
+    val removed_ids: List<String> = emptyList(),
+    val removed_count: Int = 0
+)

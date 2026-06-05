@@ -33,6 +33,22 @@ class NotesRepository {
         }
     }
 
+    /**
+     * Asks the server to clean up any duplicate notes the user may have
+     * accumulated from a pre-v1.7.1 sync bug. Returns the number of notes
+     * the server removed (0 if there were no duplicates). Safe to call
+     * on every successful sync — the server is a no-op when there's
+     * nothing to dedupe.
+     */
+    suspend fun dedupNotesOnServer(): Int = withContext(Dispatchers.IO) {
+        try {
+            val response = api.dedupNotes(confirm = true)
+            if (response.success) response.removed_count else 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
     private suspend fun syncNotesInternal() {
         val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
         if (!hasToken) return
@@ -57,7 +73,31 @@ class NotesRepository {
                 continue
             }
 
-            val op = if (note.pendingOp == "none" || note.pendingOp.isBlank()) "create" else note.pendingOp
+            // The discriminator for "should this be pushed" is the ID prefix,
+            // not the pending_op value. A "local_*" id means the note was
+            // created on the device and never reached the server, so it must
+            // be pushed as CREATE. A real server id (UUID) means the note was
+            // already on the server, so we only push if the user explicitly
+            // edited or deleted it offline (pending_op = edit/delete). Any
+            // other combination (e.g. is_synced=0 with a server id and
+            // pending_op="none") is a stale sync flag from a logout/401 and
+            // must be SKIPPED — re-pushing it would create a duplicate note
+            // on the server.
+            val isLocal = note.id.startsWith("local_")
+            val op = when {
+                note.pendingOp == "edit" -> "edit"
+                note.pendingOp == "delete" -> "delete"
+                note.pendingOp == "create" -> "create"
+                isLocal -> "create"
+                else -> "skip"
+            }
+
+            if (op == "skip") {
+                // Stale row — leave the local copy as-is. The pull step below
+                // will refresh it from the server (or, if it really was
+                // deleted on the server, remove it in step 5).
+                continue
+            }
 
             // Check total server note count limit for Free users
             if (op == "create" && isFree && serverCount >= maxServerNotes) {
@@ -331,7 +371,13 @@ class NotesRepository {
     }
 
     fun clearLocalData() {
-        dbHelper.clearSyncFlags()
+        // Wipe the local cache on logout / 401 / splash token check. The
+        // previous implementation called clearSyncFlags() which marked every
+        // row as is_synced=0 + pending_op="none" and caused the sync loop to
+        // re-push every already-synced note as a new CREATE (duplicate-notes
+        // bug). Doing a full clear here means the next login starts from a
+        // clean slate and the pull step simply repopulates from the server.
+        dbHelper.clearAll()
     }
 
     fun wipeAllData() {

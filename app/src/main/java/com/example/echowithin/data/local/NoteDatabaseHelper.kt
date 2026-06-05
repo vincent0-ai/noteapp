@@ -163,10 +163,16 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     fun getPendingNotes(): List<AppNote> {
         val notes = mutableListOf<AppNote>()
         val db = readableDatabase
+        // A note is "pending" only if it either has an explicit pending op
+        // (create/edit/delete) or was created locally and never reached the
+        // server (id starts with "local_"). A stale row with is_synced=0 and
+        // pending_op="none" is the result of a sync-flag reset (e.g. logout)
+        // and must NOT be re-pushed as a CREATE — that was causing the
+        // duplicate-notes bug.
         val cursor = db.query(
             TABLE_NOTES,
             null,
-            "$COLUMN_IS_SYNCED = 0",
+            "$COLUMN_IS_SYNCED = 0 AND ($COLUMN_PENDING_OP != 'none' OR $COLUMN_ID LIKE 'local_%')",
             null, null, null, null
         )
         
@@ -260,7 +266,11 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     /**
      * Resets sync flags on all notes but keeps content intact.
-     * Used on logout/401 so notes remain for offline viewing.
+     * NOTE: Do NOT call this from the logout/401 path — it sets
+     * pending_op="none" with a real server id, and the sync loop used to
+     * misread that combination as "create" and re-push the note to the
+     * server (the original duplicate-notes bug). The logout path now
+     * uses [clearAll] instead.
      */
     fun clearSyncFlags() {
         val db = writableDatabase

@@ -154,6 +154,9 @@ interface EchoWithinApiService {
 
     @POST("api/activity/mark_read")
     suspend fun markAllProposalsRead(): GenericResponse
+
+    @POST("api/v1/notes/dedup")
+    suspend fun dedupNotes(@Query("confirm") confirm: Boolean = true): DedupResponseDto
 }
 
 
