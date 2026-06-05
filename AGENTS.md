@@ -80,3 +80,14 @@
 5. **Clean Production client (`ApiClient.kt`)**:
    - Completely deleted references and imports to the deprecated `FakeEchoWithinApiService` to ensure it is targeted strictly at production.
 
+### Model: opencode/minimax-m3-free
+**Date:** 2026-06-05
+**Changes:**
+- **Note preview takes full height (scrollable)** — Removed the `heightIn(min = 100.dp, max = 500.dp)` cap on the content card in `NoteDetailScreen.kt`. The outer `verticalScroll` on the screen Column now carries the user through long notes instead of clipping them at 500.dp. Added `min = 160.dp` on the body so a one-liner still looks balanced, and added bottom padding so the last line never sits under the sticky action bar.
+- **Sticky bottom action bar** — Restructured `NoteDetailScreen` so the layout is `Box { Column(verticalScroll) { ... }; Surface(align = Alignment.BottomCenter) { ... } }`. The Surface hosts the primary reading actions (Edit / Copy / Share / History) that are always reachable, while secondary actions (Sync / Lock / Delete) remain in a slim inline row inside the scrollable content. The Surface must be a *direct* child of the outer Box so `BoxScope.align` resolves — earlier attempts placed it inside the inner Column and triggered `'fun Modifier.align(...)' cannot be called in this context with an implicit receiver` at compile time.
+- **KaTeX WebView is non-scrolling** — `WebView` settings now use `LayoutAlgorithm.TEXT_AUTOSIZING`, disabled vertical/horizontal scrollbars, and `OVER_SCROLL_NEVER` so the rendered math grows with its content rather than nesting an extra scroll surface on top of the screen's `verticalScroll`.
+- **Readability pass** — Body `Text` bumped to `17.sp / 26.sp line height` with horizontal and vertical padding. Combined with the removed height cap, a single screenful is much more readable on small phones.
+**Files touched:** `app/src/main/java/com/example/echowithin/presentation/screens/NoteDetailScreen.kt`, this `AGENTS.md`.
+**Verification:** `./gradlew.bat compileDebugKotlin` and `./gradlew.bat assembleDebug` both pass. Only a pre-existing `LocalClipboardManager` deprecation warning remains.
+**Privacy Note:** No data exposure changes — all actions delegate to existing handlers; Lock still requires the user's stored PIN.
+
