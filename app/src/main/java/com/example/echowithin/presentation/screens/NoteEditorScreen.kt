@@ -50,7 +50,13 @@ private val BLOCKQUOTE_REGEX_EDITOR = Regex("^\\s*>\\s*(.*)")
 private val LINK_REGEX_EDITOR = Regex("\\[(.*?)\\]\\(.*?\\)")
 private val STRIKETHROUGH_REGEX_EDITOR = Regex("~~(.*?)~~")
 
-private const val MAX_CHAR_LIMIT = 50_000
+// Limits are dynamic: Guest (no token) -> Unlimited; Sync users -> Free is 20K, Premium is 100K.
+private fun getMaxCharLimit(): Int {
+    val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
+    if (!hasToken) return Int.MAX_VALUE
+    val isFree = com.example.echowithin.data.network.SessionManager.accountTier == "free"
+    return if (isFree) 20_000 else 100_000
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -228,11 +234,12 @@ fun NoteEditorScreen(
                     }
                 }
 
+                val limit = remember { getMaxCharLimit() }
                 when (selectedTab) {
                     0 -> WriteTab(
                         contentField = contentField,
                         onContentChange = {
-                            if (it.text.length <= MAX_CHAR_LIMIT) {
+                            if (it.text.length <= limit) {
                                 contentField = it
                             }
                         },
@@ -242,7 +249,7 @@ fun NoteEditorScreen(
                         onTagsChange = { tags = it },
                         charCount = content.length,
                         wordCount = wordCount,
-                        maxChars = MAX_CHAR_LIMIT
+                        maxChars = limit
                     )
                     1 -> PreviewTab(content = content)
                 }
@@ -301,9 +308,10 @@ private fun WriteTab(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = "$charCount / ${"%,d".format(maxChars)}",
+                    text = if (maxChars == Int.MAX_VALUE) "$charCount" else "$charCount / ${"%,d".format(maxChars)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = when {
+                        maxChars == Int.MAX_VALUE -> MaterialTheme.colorScheme.onSurfaceVariant
                         charCount > (maxChars * 0.9).toInt() -> ErrorRed
                         charCount > (maxChars * 0.75).toInt() -> MaterialTheme.colorScheme.secondary
                         else -> MaterialTheme.colorScheme.onSurfaceVariant

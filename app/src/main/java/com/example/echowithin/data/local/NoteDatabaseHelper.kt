@@ -258,8 +258,24 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.delete(TABLE_NOTES, "$COLUMN_ID = ?", arrayOf(id))
     }
 
+    /**
+     * Resets sync flags on all notes but keeps content intact.
+     * Used on logout/401 so notes remain for offline viewing.
+     */
+    fun clearSyncFlags() {
+        val db = writableDatabase
+        val values = android.content.ContentValues().apply {
+            put(COLUMN_IS_SYNCED, 0)
+            put(COLUMN_PENDING_OP, "none")
+        }
+        db.update(TABLE_NOTES, values, null, null)
+    }
+
+    /**
+     * Deletes ALL synced notes. Only use for explicit "Delete Account" or full data wipe.
+     */
     fun clearAll() {
         val db = writableDatabase
-        db.delete(TABLE_NOTES, "$COLUMN_IS_SYNCED = ?", arrayOf("1"))
+        db.delete(TABLE_NOTES, null, null)
     }
 }

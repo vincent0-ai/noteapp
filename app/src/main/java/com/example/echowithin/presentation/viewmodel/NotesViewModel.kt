@@ -27,7 +27,7 @@ import kotlinx.coroutines.withContext
 data class NotesUiState(
     val notes: List<AppNote> = emptyList(),
     val searchResults: List<SearchHitDto> = emptyList(),
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isSyncing: Boolean = false,
     val error: String? = null,
     val proposals: List<ProposalDto> = emptyList(),
@@ -86,7 +86,7 @@ class NotesViewModel(
             repository.syncNotes()
                 .onSuccess {
                     uiState = uiState.copy(isSyncing = false)
-                    loadNotes()
+                    loadNotes(silent = true)
                 }
                 .onFailure {
                     uiState = uiState.copy(isSyncing = false, error = it.message ?: "Sync failed")
@@ -102,7 +102,17 @@ class NotesViewModel(
             withContext(Dispatchers.IO) {
                 repository.clearLocalData()
             }
-            uiState = NotesUiState()
+            uiState = NotesUiState(isLoading = false)
+            isInitialDataLoaded = false
+        }
+    }
+
+    fun wipeAllData() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.wipeAllData()
+            }
+            uiState = NotesUiState(isLoading = false)
             isInitialDataLoaded = false
         }
     }
@@ -112,40 +122,41 @@ class NotesViewModel(
         isInitialDataLoaded = true
         
         viewModelScope.launch {
+            // 1. Instantly load local notes
             val localNotes = withContext(Dispatchers.IO) {
                 repository.getLocalNotes()
             }
-            if (localNotes.isNotEmpty()) {
-                uiState = uiState.copy(notes = localNotes, isLoading = false, error = null)
-            } else {
-                uiState = uiState.copy(isLoading = true, error = null)
-            }
+            uiState = uiState.copy(notes = localNotes, isLoading = localNotes.isEmpty(), error = null)
             
-            repository.getNotes()
-                .onSuccess { notes ->
-                    uiState = uiState.copy(isLoading = false, notes = notes)
-                    loadProposals()
-                    loadActiveShares()
-                    loadNotifications()
+            // 2. Perform network sync and fetches concurrently in the background
+            launch {
+                val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
+                if (hasToken && com.example.echowithin.data.network.SessionManager.syncMode == "automatic") {
+                    repository.syncNotes()
                 }
-                .onFailure {
-                    uiState = uiState.copy(isLoading = false)
-                    if (uiState.notes.isEmpty()) {
-                        uiState = uiState.copy(error = it.message ?: "Failed to load notes")
-                    }
+                // Refresh list from updated DB
+                val updatedNotes = withContext(Dispatchers.IO) {
+                    repository.getLocalNotes()
                 }
+                uiState = uiState.copy(notes = updatedNotes, isLoading = false)
+                
+                // Load metadata in parallel
+                loadProposals()
+                loadActiveShares()
+                loadNotifications()
+            }
         }
     }
 
-    fun loadNotes() {
+    fun loadNotes(silent: Boolean = false) {
         viewModelScope.launch {
             val localNotes = withContext(Dispatchers.IO) {
                 repository.getLocalNotes()
             }
-            if (localNotes.isNotEmpty()) {
-                uiState = uiState.copy(notes = localNotes, isLoading = false, error = null)
+            if (!silent) {
+                uiState = uiState.copy(notes = localNotes, isLoading = localNotes.isEmpty(), error = null)
             } else {
-                uiState = uiState.copy(isLoading = true, error = null)
+                uiState = uiState.copy(notes = localNotes, error = null)
             }
             
             repository.getNotes()

@@ -58,7 +58,8 @@ class AppUpdateManager(private val context: Context) {
             val body = response.body ?: return@withContext false
             val contentLength = body.contentLength()
             
-            val destinationFile = File(context.cacheDir, "update-latest.apk")
+            val downloadDir = context.externalCacheDir ?: context.cacheDir
+            val destinationFile = File(downloadDir, "update-latest.apk")
             if (destinationFile.exists()) destinationFile.delete()
 
             body.byteStream().use { input ->

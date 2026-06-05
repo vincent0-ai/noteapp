@@ -18,21 +18,9 @@ class NotesRepository {
 
     suspend fun getNotes(page: Int = 1, perPage: Int = 20): Result<List<AppNote>> = withContext(Dispatchers.IO) {
         runCatching {
-            // 1. Immediately return local notes
-            val localNotes = dbHelper.getAllNotes()
-            
-            // 2. If Automatic Sync is active and user is logged in, trigger sync in the background
-            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
-            if (SessionManager.syncMode == "automatic" && hasToken) {
-                try {
-                    syncNotesInternal()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-                dbHelper.getAllNotes()
-            } else {
-                localNotes
-            }
+            // Return local notes immediately.
+            // Foreground sync should be triggered explicitly by the view model/UI layer (e.g. pull-to-refresh or app launch).
+            dbHelper.getAllNotes()
         }
     }
 
@@ -46,6 +34,9 @@ class NotesRepository {
     }
 
     private suspend fun syncNotesInternal() {
+        val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+        if (!hasToken) return
+
         val isFree = SessionManager.accountTier == "free"
         val maxNoteSize = if (isFree) 20000 else 100000
         val maxServerNotes = 50
@@ -156,8 +147,8 @@ class NotesRepository {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
-            val isFree = SessionManager.accountTier == "free" || SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
-            val pendingOp = if (isFree) "none" else "create"
+            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+            val pendingOp = if (!hasToken) "none" else "create"
             val note = AppNote(
                 id = tempId,
                 title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
@@ -172,19 +163,7 @@ class NotesRepository {
             )
             
             dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)
-
-            if (SessionManager.syncMode == "automatic" && !isFree) {
-                try {
-                    syncNotesInternal()
-                    // Try to get updated note ID
-                    val updatedNote = dbHelper.getAllNotes().firstOrNull { it.content == content && it.reference == reference }
-                    updatedNote?.id ?: tempId
-                } catch (e: Exception) {
-                    tempId
-                }
-            } else {
-                tempId
-            }
+            tempId
         }
     }
 
@@ -193,9 +172,9 @@ class NotesRepository {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
-            val isFree = SessionManager.accountTier == "free" || SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
+            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
             val existing = dbHelper.getNoteById(noteId)
-            val pendingOp = if (isFree) "none" else (if (existing?.pendingOp == "create") "create" else "edit")
+            val pendingOp = if (!hasToken) "none" else (if (existing?.pendingOp == "create") "create" else "edit")
             
             val note = AppNote(
                 id = noteId,
@@ -211,32 +190,17 @@ class NotesRepository {
             )
             
             dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)
-
-            if (SessionManager.syncMode == "automatic" && !isFree) {
-                try {
-                    syncNotesInternal()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
             noteId
         }
     }
 
     suspend fun deleteNote(noteId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val isFree = SessionManager.accountTier == "free"
-            if (isFree) {
+            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+            if (!hasToken) {
                 dbHelper.deletePhysically(noteId)
             } else {
                 dbHelper.markDeleted(noteId)
-                if (SessionManager.syncMode == "automatic") {
-                    try {
-                        syncNotesInternal()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
             }
         }
     }
@@ -367,6 +331,10 @@ class NotesRepository {
     }
 
     fun clearLocalData() {
+        dbHelper.clearSyncFlags()
+    }
+
+    fun wipeAllData() {
         dbHelper.clearAll()
     }
 
