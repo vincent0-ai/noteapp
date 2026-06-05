@@ -3,6 +3,7 @@ package com.example.echowithin.presentation.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -234,14 +235,27 @@ fun NoteDetailScreen(
             }
         } else {
             val note = noteState
-            Column(
+            // Outer Box lets us stack a scrollable reading surface with a
+            // sticky bottom action bar so the user can always reach Edit,
+            // Share, Copy, History, Lock, etc. no matter how far they have
+            // scrolled through the note.
+            // Outer Box lets us stack a scrollable reading surface with a
+            // sticky bottom action bar so the user can always reach Edit,
+            // Share, Copy, History, Lock, etc. no matter how far they have
+            // scrolled through the note.
+            Box(
                 modifier = modifier
                     .fillMaxSize()
                     .padding(innerPadding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp)
+                        .padding(top = 20.dp, bottom = 96.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
                 // Update Available Banner (Sync Now)
                 if (noteState?.updateAvailable == true) {
                     Card(
@@ -377,7 +391,19 @@ fun NoteDetailScreen(
                     }
                 }
 
+                // Check if the note content contains mathematical/LaTeX delimiters: $ or $$
+                val contentText = note?.content.orEmpty()
+                val containsMath = remember(contentText) {
+                    contentText.contains("$")
+                }
+
                 // Note Content Panel
+                // The content now takes the full natural height of the note
+                // (no more `heightIn(max = 500.dp)` cap), so the outer
+                // vertical scroll carries the user through long notes. The
+                // WebView is forced into a non-scrolling, single-column layout
+                // to avoid the nested-scroll jankiness that was happening
+                // against the outer Column.
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
@@ -387,17 +413,69 @@ fun NoteDetailScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(20.dp)
+                            .heightIn(min = 160.dp)
                     ) {
-                        Text(
-                            text = displayContent,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        if (containsMath) {
+                            val isDark = isSystemInDarkTheme()
+                            androidx.compose.ui.viewinterop.AndroidView(
+                                factory = { ctx ->
+                                    android.webkit.WebView(ctx).apply {
+                                        settings.apply {
+                                            javaScriptEnabled = true
+                                            allowFileAccess = true
+                                            domStorageEnabled = true
+                                            // The WebView grows with its content
+                                            // and is fully driven by the outer
+                                            // vertical scroll — no nested scroll.
+                                            layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                                            isVerticalScrollBarEnabled = false
+                                            isHorizontalScrollBarEnabled = false
+                                            overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                                        }
+                                        webViewClient = android.webkit.WebViewClient()
+                                        loadUrl("file:///android_asset/katex/math_renderer.html")
+                                    }
+                                },
+                                update = { webView ->
+                                    // Inject rawText and theme into the page once it's loaded.
+                                    webView.webViewClient = object : android.webkit.WebViewClient() {
+                                        override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                            val escapedText = contentText
+                                                .replace("\\", "\\\\")
+                                                .replace("`", "\\`")
+                                                .replace("$", "\\$")
+                                            webView.evaluateJavascript("renderContent(`$escapedText`, $isDark)", null)
+                                        }
+                                    }
+                                    // If already loaded, trigger immediately
+                                    val escapedText = contentText
+                                        .replace("\\", "\\\\")
+                                        .replace("`", "\\`")
+                                        .replace("$", "\\$")
+                                    webView.evaluateJavascript("renderContent(`$escapedText`, $isDark)", null)
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            Text(
+                                text = displayContent,
+                                style = MaterialTheme.typography.bodyLarge.copy(
+                                    fontSize = 17.sp,
+                                    lineHeight = 26.sp
+                                ),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 20.dp, vertical = 18.dp)
+                            )
+                        }
                     }
                 }
 
-                // Quick Actions Row
+                // Quick Actions Row — secondary actions (Sync / Lock / Delete)
+                // that complement the sticky bottom bar.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
@@ -425,34 +503,6 @@ fun NoteDetailScreen(
                         }
                     }
                     IconButton(onClick = {
-                        if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
-                            android.widget.Toast.makeText(context, "Sign in or create an account to share notes!", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            onShare()
-                        }
-                    }) {
-                        Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    // Copy content to clipboard
-                    IconButton(onClick = {
-                        val rawText = noteState?.content.orEmpty()
-                        if (rawText.isNotBlank()) {
-                            clipboardManager.setText(AnnotatedString(rawText))
-                            android.widget.Toast.makeText(context, "Note copied to clipboard", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = MaterialTheme.colorScheme.primary)
-                    }
-                    IconButton(onClick = {
-                        if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
-                            android.widget.Toast.makeText(context, "Sign in or create an account to view versions!", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            onVersions()
-                        }
-                    }) {
-                        Icon(Icons.Default.History, contentDescription = "Versions", tint = MaterialTheme.colorScheme.secondary)
-                    }
-                    IconButton(onClick = {
                         val isGuest = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()
                         val isFree = com.example.echowithin.data.network.SessionManager.accountTier == "free"
                         if (isGuest || isFree) {
@@ -473,7 +523,82 @@ fun NoteDetailScreen(
                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
                     }
                 }
-            }
+                }  // close inner Column
+
+                // ── Sticky bottom action bar ──
+                // The reading surface scrolls freely above. A bottom-anchored
+                // surface always shows the primary actions (Edit / Copy /
+                // Share / History) so the user can reach them no matter how
+                // far they have scrolled into the note. Secondary actions
+                // (Sync / Lock / Delete) remain in the inline row above.
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(androidx.compose.ui.Alignment.BottomCenter),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 8.dp,
+                    tonalElevation = 4.dp
+                ) {
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.FilledTonalButton(
+                            onClick = onEdit,
+                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        ) {
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+                            Text("Edit", fontWeight = FontWeight.SemiBold)
+                        }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                val rawText = noteState?.content.orEmpty()
+                                if (rawText.isNotBlank()) {
+                                    clipboardManager.setText(AnnotatedString(rawText))
+                                    android.widget.Toast.makeText(context, "Note copied", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+                            Text("Copy")
+                        }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
+                                    android.widget.Toast.makeText(context, "Sign in to share notes", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onShare()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+                            Text("Share")
+                        }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
+                                    android.widget.Toast.makeText(context, "Sign in to view versions", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onVersions()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(18.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(6.dp))
+                            Text("History")
+                        }
+                    }
+                }
+            }  // close outer Box
         }
     }
 
