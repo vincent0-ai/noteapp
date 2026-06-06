@@ -93,6 +93,35 @@ class NoteShareViewModel(
         }
     }
 
+    /**
+     * Flip the link-wide `auto_approve` flag on an existing share. The
+     * server returns 403 with `upgrade_required: true` for free-tier
+     * accounts; we surface that as a user-readable error in the
+     * existing `uiState.error` slot.
+     */
+    fun toggleAutoApprove(shareId: String, enabled: Boolean) {
+        // Optimistic UI update — flip the local flag immediately so the
+        // switch feels snappy. The actual server call happens in the
+        // background; on failure we revert.
+        val previous = uiState.shares
+        val optimistic = previous.map { s ->
+            if (s.share_id == shareId) s.copy(auto_approve = enabled) else s
+        }
+        uiState = uiState.copy(shares = optimistic, error = null)
+
+        viewModelScope.launch {
+            repository.toggleShareAutoApprove(shareId, enabled)
+                .onSuccess { /* state already updated */ }
+                .onFailure { err ->
+                    // Revert and surface the error
+                    uiState = uiState.copy(
+                        shares = previous,
+                        error = err.message ?: "Could not update auto-approve"
+                    )
+                }
+        }
+    }
+
     companion object {
         fun factory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

@@ -51,10 +51,20 @@ class NoteVersionsViewModel(
         uiState = uiState.copy(error = null, restoreSuccess = false)
     }
 
-    fun decide(versionId: String, approve: Boolean, comment: String = "") {
+    fun decide(
+        versionId: String,
+        approve: Boolean,
+        comment: String = "",
+        autoApproveSubsequent: Boolean = false
+    ) {
         uiState = uiState.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            repository.decideProposal(versionId, if (approve) "approve" else "reject", comment)
+            repository.decideProposal(
+                versionId,
+                if (approve) "approve" else "reject",
+                comment,
+                autoApproveSubsequent
+            )
                 .onSuccess { load(uiState.noteId) }
                 .onFailure { uiState = uiState.copy(isLoading = false, error = it.message ?: "Could not update proposal") }
         }

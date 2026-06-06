@@ -260,8 +260,12 @@ fun AppNavGraph(
                 // Proposals
                 proposals = notesViewModel.uiState.proposals,
                 proposalsLoading = notesViewModel.uiState.proposalsLoading,
-                onApproveProposal = { notesViewModel.approveProposal(it) },
-                onRejectProposal = { notesViewModel.rejectProposal(it) },
+                onApproveProposal = { versionId, comment, autoApproveSubsequent ->
+                    notesViewModel.approveProposal(versionId, comment, autoApproveSubsequent)
+                },
+                onRejectProposal = { versionId, comment ->
+                    notesViewModel.rejectProposal(versionId, comment)
+                },
                 // Share management
                 activeShares = notesViewModel.uiState.activeShares,
                 sharesLoading = notesViewModel.uiState.sharesLoading,
@@ -396,6 +400,7 @@ fun AppNavGraph(
                 },
                 onSelectShare = { shareViewModel.selectShare(it) },
                 onRevokeShare = { shareViewModel.revokeShare(it) },
+                onToggleAutoApprove = { shareId, enabled -> shareViewModel.toggleAutoApprove(shareId, enabled) },
                 onOpenShareLink = { shareId ->
                     try {
                         val intent = android.content.Intent(
@@ -421,7 +426,9 @@ fun AppNavGraph(
                 uiState = versionsViewModel.uiState,
                 onBack = { navController.popBackStack() },
                 onRestore = { versionsViewModel.restore(it) },
-                onDecide = { versionId, approve -> versionsViewModel.decide(versionId, approve) },
+                onDecide = { versionId, approve, comment, autoApproveSubsequent ->
+                    versionsViewModel.decide(versionId, approve, comment, autoApproveSubsequent)
+                },
                 onClearFeedback = { versionsViewModel.clearFeedback() }
             )
         }

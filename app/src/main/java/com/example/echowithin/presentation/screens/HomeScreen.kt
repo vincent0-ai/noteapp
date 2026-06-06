@@ -26,6 +26,7 @@ import com.example.echowithin.data.model.ProposalDto
 import com.example.echowithin.data.model.ShareDto
 import com.example.echowithin.data.model.NotificationDto
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
+import com.example.echowithin.presentation.components.ProposalReviewDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
@@ -75,8 +76,8 @@ fun HomeScreen(
     // Proposals (Activity tab)
     proposals: List<ProposalDto>,
     proposalsLoading: Boolean,
-    onApproveProposal: (String) -> Unit,
-    onRejectProposal: (String) -> Unit,
+    onApproveProposal: (String, String, Boolean) -> Unit,
+    onRejectProposal: (String, String) -> Unit,
     // Share management
     activeShares: List<Pair<AppNote, List<ShareDto>>>,
     sharesLoading: Boolean,
@@ -624,8 +625,8 @@ private fun ActivityTabContent(
     proposalsLoading: Boolean,
     notifications: List<NotificationDto>,
     unreadNotificationsCount: Int,
-    onApproveProposal: (String) -> Unit,
-    onRejectProposal: (String) -> Unit,
+    onApproveProposal: (String, String, Boolean) -> Unit,
+    onRejectProposal: (String, String) -> Unit,
     onMarkAllRead: () -> Unit,
     markingAllRead: Boolean = false
 ) {
@@ -715,8 +716,12 @@ private fun ActivityTabContent(
                     items(proposals, key = { it.version_id }, contentType = { "proposal" }) { proposal ->
                         ProposalCard(
                             proposal = proposal,
-                            onApprove = { onApproveProposal(proposal.version_id) },
-                            onDecline = { onRejectProposal(proposal.version_id) }
+                            onApprove = { comment, autoApproveSubsequent ->
+                                onApproveProposal(proposal.version_id, comment, autoApproveSubsequent)
+                            },
+                            onDecline = { comment ->
+                                onRejectProposal(proposal.version_id, comment)
+                            }
                         )
                     }
                 }
@@ -869,9 +874,16 @@ private fun NotificationCard(notification: NotificationDto) {
 @Composable
 private fun ProposalCard(
     proposal: ProposalDto,
-    onApprove: () -> Unit,
-    onDecline: () -> Unit
+    onApprove: (comment: String, autoApproveSubsequent: Boolean) -> Unit,
+    onDecline: (comment: String) -> Unit
 ) {
+    // Approve / Decline are routed through a small review dialog so
+    // the owner can leave a comment (mirroring the web flow) and, on
+    // accept, optionally mark this editor as auto-approved for future
+    // proposals on the same share.
+    var showReviewDialog by remember { mutableStateOf(false) }
+    var reviewApprove by remember { mutableStateOf(true) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -926,7 +938,10 @@ private fun ProposalCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
             ) {
                 OutlinedButton(
-                    onClick = onDecline,
+                    onClick = {
+                        reviewApprove = false
+                        showReviewDialog = true
+                    },
                     shape = RoundedCornerShape(8.dp),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                     modifier = Modifier.height(34.dp),
@@ -935,7 +950,10 @@ private fun ProposalCard(
                     Text("Decline", style = MaterialTheme.typography.labelSmall, color = ErrorRed)
                 }
                 Button(
-                    onClick = onApprove,
+                    onClick = {
+                        reviewApprove = true
+                        showReviewDialog = true
+                    },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
@@ -945,6 +963,18 @@ private fun ProposalCard(
                 }
             }
         }
+    }
+
+    if (showReviewDialog) {
+        ProposalReviewDialog(
+            isApprove = reviewApprove,
+            onDismiss = { showReviewDialog = false },
+            onSubmit = { comment, autoApproveSubsequent ->
+                showReviewDialog = false
+                if (reviewApprove) onApprove(comment, autoApproveSubsequent)
+                else onDecline(comment)
+            }
+        )
     }
 }
 

@@ -42,6 +42,7 @@ fun NoteShareScreen(
     onSelectShare: (String) -> Unit,
     onRevokeShare: (String) -> Unit,
     onOpenShareLink: (String) -> Unit,
+    onToggleAutoApprove: (String, Boolean) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -229,6 +230,31 @@ fun NoteShareScreen(
                                         color = BrandAmber
                                     )
                                 }
+                            }
+
+                            // Auto-approve toggle. Editable per share so the
+                            // owner can flip the link-wide flag after
+                            // creation (server returns 403 with
+                            // `upgrade_required` for free-tier accounts —
+                            // the snackbar surfaces the message).
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "Auto-approve edits",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Switch(
+                                    checked = share.auto_approve,
+                                    onCheckedChange = { onToggleAutoApprove(share.share_id, it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = BrandOrange
+                                    )
+                                )
                             }
 
                             Row(

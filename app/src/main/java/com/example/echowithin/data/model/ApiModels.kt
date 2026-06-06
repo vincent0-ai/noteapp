@@ -187,7 +187,13 @@ data class VersionsListDto(
 
 data class ProposalDecisionDto(
     val decision: String,
-    val comment: String = ""
+    val comment: String = "",
+    val auto_approve_subsequent: Boolean = false
+)
+
+data class ToggleShareAutoApproveDto(
+    val auto_approve: Boolean,
+    val editor_id: String? = null
 )
 
 data class ProposalDto(

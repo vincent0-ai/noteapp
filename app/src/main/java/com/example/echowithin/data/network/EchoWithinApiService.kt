@@ -105,6 +105,12 @@ interface EchoWithinApiService {
     @POST("api/v1/notes/proposal/{versionId}/decision")
     suspend fun decideProposal(@Path("versionId") versionId: String, @Body body: ProposalDecisionDto): GenericResponse
 
+    @POST("api/v1/notes/share/{shareId}/auto_approve")
+    suspend fun toggleShareAutoApprove(
+        @Path("shareId") shareId: String,
+        @Body body: ToggleShareAutoApproveDto
+    ): GenericResponse
+
     @POST("api/v1/app_lock/setup")
     suspend fun setupAppLock(@Body body: AppLockSetupDto): GenericResponse
 

@@ -475,12 +475,16 @@ class NotesViewModel(
         }
     }
 
-    fun approveProposal(versionId: String) {
+    fun approveProposal(versionId: String, comment: String = "", autoApproveSubsequent: Boolean = false) {
         viewModelScope.launch {
             try {
                 com.example.echowithin.data.network.ApiClient.apiService.decideProposal(
                     versionId,
-                    com.example.echowithin.data.model.ProposalDecisionDto(decision = "approve", comment = "")
+                    com.example.echowithin.data.model.ProposalDecisionDto(
+                        decision = "approve",
+                        comment = comment.take(180),
+                        auto_approve_subsequent = autoApproveSubsequent
+                    )
                 )
                 loadProposals()
                 loadNotes()
@@ -490,12 +494,16 @@ class NotesViewModel(
         }
     }
 
-    fun rejectProposal(versionId: String) {
+    fun rejectProposal(versionId: String, comment: String = "") {
         viewModelScope.launch {
             try {
                 com.example.echowithin.data.network.ApiClient.apiService.decideProposal(
                     versionId,
-                    com.example.echowithin.data.model.ProposalDecisionDto(decision = "reject", comment = "")
+                    com.example.echowithin.data.model.ProposalDecisionDto(
+                        decision = "reject",
+                        comment = comment.take(180),
+                        auto_approve_subsequent = false
+                    )
                 )
                 loadProposals()
             } catch (e: Exception) {

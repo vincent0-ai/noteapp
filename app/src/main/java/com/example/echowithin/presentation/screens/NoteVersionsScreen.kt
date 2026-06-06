@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
+import com.example.echowithin.presentation.components.ProposalReviewDialog
 import com.example.echowithin.presentation.viewmodel.NoteVersionsUiState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,11 +31,12 @@ fun NoteVersionsScreen(
     uiState: NoteVersionsUiState,
     onBack: () -> Unit,
     onRestore: (String) -> Unit,
-    onDecide: (String, Boolean) -> Unit,
+    onDecide: (String, Boolean, String, Boolean) -> Unit,
     onClearFeedback: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
+    var reviewTarget by remember { mutableStateOf<ReviewTarget?>(null) }
 
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
@@ -186,7 +188,9 @@ fun NoteVersionsScreen(
 
                                     if (version.is_proposal) {
                                         Button(
-                                            onClick = { onDecide(version.version_id, true) },
+                                            onClick = {
+                                                reviewTarget = ReviewTarget(version.version_id, true)
+                                            },
                                             shape = RoundedCornerShape(8.dp),
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -198,7 +202,9 @@ fun NoteVersionsScreen(
                                         }
 
                                         Button(
-                                            onClick = { onDecide(version.version_id, false) },
+                                            onClick = {
+                                                reviewTarget = ReviewTarget(version.version_id, false)
+                                            },
                                             shape = RoundedCornerShape(8.dp),
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = MaterialTheme.colorScheme.surfaceVariant,
@@ -228,4 +234,17 @@ fun NoteVersionsScreen(
             }
         }
     }
+
+    reviewTarget?.let { target ->
+        ProposalReviewDialog(
+            isApprove = target.isApprove,
+            onDismiss = { reviewTarget = null },
+            onSubmit = { comment, autoApproveSubsequent ->
+                onDecide(target.versionId, target.isApprove, comment, autoApproveSubsequent)
+                reviewTarget = null
+            }
+        )
+    }
 }
+
+private data class ReviewTarget(val versionId: String, val isApprove: Boolean)

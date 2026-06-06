@@ -6,6 +6,7 @@ import com.example.echowithin.data.model.CommentRequestDto
 import com.example.echowithin.data.model.ProposalDecisionDto
 import com.example.echowithin.data.model.ShareRequestDto
 import com.example.echowithin.data.model.ShareDto
+import com.example.echowithin.data.model.ToggleShareAutoApproveDto
 import com.example.echowithin.data.model.VersionDto
 import com.example.echowithin.data.network.ApiClient
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -147,9 +148,36 @@ class ShareRepository {
         if (!response.success) throw IllegalStateException(response.message ?: response.error ?: "Could not restore version")
     }
 
-    suspend fun decideProposal(versionId: String, decision: String, comment: String = ""): Result<Unit> = runCatching {
-        val response = api.decideProposal(versionId, ProposalDecisionDto(decision = decision, comment = comment))
+    suspend fun decideProposal(
+        versionId: String,
+        decision: String,
+        comment: String = "",
+        autoApproveSubsequent: Boolean = false
+    ): Result<Unit> = runCatching {
+        val response = api.decideProposal(
+            versionId,
+            ProposalDecisionDto(
+                decision = decision,
+                comment = comment.take(180),
+                auto_approve_subsequent = autoApproveSubsequent
+            )
+        )
         if (!response.success) throw IllegalStateException(response.message ?: response.error ?: "Could not update proposal")
+    }
+
+    suspend fun toggleShareAutoApprove(
+        shareId: String,
+        enabled: Boolean,
+        editorId: String? = null
+    ): Result<Boolean> = runCatching {
+        val response = api.toggleShareAutoApprove(
+            shareId,
+            ToggleShareAutoApproveDto(auto_approve = enabled, editor_id = editorId)
+        )
+        if (!response.success) {
+            throw IllegalStateException(response.error ?: "Could not update auto-approve")
+        }
+        enabled
     }
 }
 
