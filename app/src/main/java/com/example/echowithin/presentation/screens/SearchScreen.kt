@@ -90,6 +90,23 @@ fun SearchScreen(
                     CircularProgressIndicator(color = BrandOrange)
                 }
             } else {
+                // Build a (hit, note) pair list so the locked-note filter
+                // only runs once per query result set, not once per
+                // recomposition per item.
+                //
+                // The server-side /personal_post/search endpoint already
+                // filters out locked notes (see blueprints/notes.py in the
+                // backend), and the offline fallback in NotesRepository
+                // filters them out locally too. The check below is a
+                // belt-and-braces defence — if anything ever slips through
+                // (older server, partial sync, etc.) we still won't leak
+                // locked note content into the search results list.
+                val notePairs = remember(results) {
+                    results.map { hit -> hit to viewModel.getNoteById(hit.id) }
+                }
+                val visiblePairs = remember(notePairs) {
+                    notePairs.filter { (_, note) -> note?.isLocked != true }
+                }
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -97,8 +114,7 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    items(results) { hit ->
-                        val note = viewModel.getNoteById(hit.id)
+                    items(visiblePairs) { (hit, note) ->
                         val isNoteLocked = note?.isLocked == true
                         val hideContent = isNoteLocked && isLocked
 
@@ -171,10 +187,15 @@ fun SearchScreen(
                         }
                     }
 
-                    if (results.isEmpty() && query.isNotEmpty() && !isLoading) {
+                    if (visiblePairs.isEmpty() && query.isNotEmpty() && !isLoading) {
                         item {
+                            val lockedWereHidden = results.isNotEmpty()
                             Text(
-                                text = "No results found for \"$query\"",
+                                text = if (lockedWereHidden) {
+                                    "Locked notes are hidden from search. Unlock them in the Locked tab to see them here."
+                                } else {
+                                    "No results found for \"$query\""
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(32.dp),

@@ -254,8 +254,14 @@ class NotesRepository {
             try {
                 api.searchPersonalNotes(query)
             } catch (e: Exception) {
-                // API is down or user is offline/unauthenticated — fallback to offline search
-                val localNotes = dbHelper.getAllNotes()
+                // API is down or user is offline/unauthenticated — fallback to offline search.
+                // IMPORTANT: filter out locked notes here too. The server-side
+                // search already excludes them (see /personal_post/search in
+                // blueprints/notes.py), and the web platform never shows them
+                // until the user unlocks them. We mirror that behaviour so
+                // locked note content can never leak through the offline
+                // fallback path either.
+                val localNotes = dbHelper.getAllNotes().filter { !it.isLocked }
                 val filteredNotes = localNotes.filter { note ->
                     note.content.contains(query, ignoreCase = true) ||
                     note.reference.contains(query, ignoreCase = true) ||

@@ -18,6 +18,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.data.model.ProposalDto
 import com.example.echowithin.data.model.ShareDto
@@ -1009,22 +1012,47 @@ private fun SharedNoteCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            // Note first line preview
+            // Header: first-char avatar + first line of content as subtitle + lock badge + Manage
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    text = stripMarkdown(note.content).lineSequence().firstOrNull()?.trim()?.take(60)
-                        ?: "Untitled",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                FirstCharAvatar(
+                    content = note.content,
+                    titleFallback = note.title,
+                    isLocked = note.isLocked
                 )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stripMarkdown(note.content).lineSequence().firstOrNull()?.trim()?.take(60)
+                            ?: "Untitled",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (note.isLocked) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = "Locked",
+                                tint = ErrorRed,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                "Locked on website",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ErrorRed,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
                 Button(
                     onClick = onManageShares,
                     shape = RoundedCornerShape(8.dp),
@@ -1041,6 +1069,78 @@ private fun SharedNoteCard(
                 ShareLinkRow(
                     share = share,
                     onOpenLink = { onOpenShareLink(share.share_id) }
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Circular avatar showing the first non-whitespace character of the note's
+ * content (after stripping markdown). This is the "first char" visual cue
+ * the user asked for on the Shared Links tab — Gmail-style — so they can
+ * scan a long list of shares at a glance.
+ *
+ * - If the note is locked, a small lock badge sits in the bottom-right
+ *   corner of the avatar so the locked state is unmissable.
+ * - The accent colour is derived from the character's codepoint so the
+ *   same note always shows the same colour across reloads.
+ * - Falls back to "?" for genuinely empty notes.
+ */
+@Composable
+private fun FirstCharAvatar(
+    content: String,
+    titleFallback: String,
+    isLocked: Boolean,
+    size: androidx.compose.ui.unit.Dp = 44.dp
+) {
+    val stripped = stripMarkdown(content).trim()
+    val firstChar = stripped.firstOrNull()?.toString()?.take(1)?.uppercase()
+        ?: titleFallback.trim().firstOrNull()?.toString()?.take(1)?.uppercase()
+        ?: "?"
+
+    val palette = listOf(
+        MaterialTheme.colorScheme.primary,
+        MaterialTheme.colorScheme.secondary,
+        MaterialTheme.colorScheme.tertiary,
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.75f),
+        MaterialTheme.colorScheme.secondary.copy(alpha = 0.75f)
+    )
+    val codepoint = firstChar.firstOrNull()?.code ?: 0
+    val accent = palette[codepoint.mod(palette.size)]
+
+    Box(contentAlignment = Alignment.BottomEnd) {
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(RoundedCornerShape(50))
+                .background(accent.copy(alpha = 0.18f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = firstChar,
+                color = accent,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp
+            )
+        }
+        if (isLocked) {
+            Box(
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
+                        RoundedCornerShape(50)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Lock,
+                    contentDescription = "Locked",
+                    tint = ErrorRed,
+                    modifier = Modifier.size(11.dp)
                 )
             }
         }

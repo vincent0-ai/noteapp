@@ -332,6 +332,9 @@ class NotesViewModel(
                     // Server returned shares but none matched a local note.
                     // Surface them as standalone cards (synthesised note)
                     // so the user can still see and revoke their links.
+                    // The server now returns is_locked for each share, so
+                    // the card can render the lock badge even when the
+                    // note itself isn't in the local cache.
                     val synthetic = resp.shares.map { dto ->
                         val title = dto.note_title.ifBlank { "Untitled note" }
                         AppNote(
@@ -341,7 +344,7 @@ class NotesViewModel(
                             reference = "",
                             tags = emptyList(),
                             updatedAt = dto.created_at ?: "",
-                            isLocked = false,
+                            isLocked = dto.is_locked,
                             isPinned = false,
                             isSynced = true,
                             pendingOp = "none",

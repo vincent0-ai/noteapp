@@ -126,6 +126,7 @@ data class ActiveShareDto(
     val share_id: String,
     val note_id: String? = null,
     val note_title: String = "Untitled note",
+    val is_locked: Boolean = false,
     val permissions: String = "view",
     val surprise_theme: String = "none",
     val use_typewriter: Boolean = false,
