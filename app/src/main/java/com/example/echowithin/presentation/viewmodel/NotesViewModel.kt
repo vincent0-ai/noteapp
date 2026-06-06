@@ -158,13 +158,19 @@ class NotesViewModel(
      * to "online". Runs at most one sync per on-online event, debounced
      * by 2s so a Wi-Fi → cell → Wi-Fi flip in quick succession still
      * produces only one push.
+     *
+     * Respects the user's syncMode preference: in "manual" mode, reconnecting
+     * does NOT auto-push pending changes — the user has to tap the Sync
+     * button. The pending count is still surfaced to the UI so the offline
+     * banner can show "N changes pending".
      */
     fun onConnectivityChanged(isOnline: Boolean) {
         if (!isOnline) return
+        val isAutomatic = com.example.echowithin.data.network.SessionManager.syncMode == "automatic"
         viewModelScope.launch {
             val pending = pendingSyncCount()
             uiState = uiState.copy(pendingSyncCount = pending)
-            if (pending > 0 || hasToken()) {
+            if (isAutomatic && (pending > 0 || hasToken())) {
                 _syncTrigger.value = System.currentTimeMillis()
             }
         }

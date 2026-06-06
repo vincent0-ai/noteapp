@@ -215,10 +215,6 @@ object ApiClient {
             .build()
     }
 
-    // Always use the real backend API service. For release builds this is required
-    // so the app communicates with the real server at BuildConfig.API_BASE_URL.
-    // If you still want an in-memory fake service for local debugging, swap
-    // this to return FakeEchoWithinApiService() when appropriate.
     val apiService: EchoWithinApiService by lazy {
         retrofit.create(EchoWithinApiService::class.java)
     }

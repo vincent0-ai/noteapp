@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -15,10 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import com.example.echowithin.data.network.SessionManager
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
@@ -36,9 +40,11 @@ fun AppLockScreen(
     error: String?,
     onSetup: (String) -> Unit,
     onVerify: (String) -> Unit,
-    onRemove: () -> Unit,
+    onRemove: (String) -> Unit,
+    onClearError: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var pin by remember { mutableStateOf("") }
     val shakeOffset = remember { Animatable(0f) }
     var lastErrorSignature by remember { mutableStateOf<String?>(null) }
@@ -126,7 +132,7 @@ fun AppLockScreen(
                 Text(
                     text = when {
                         isLocked -> "Please enter your 4-digit PIN to continue"
-                        hasPin -> "Your notes are protected. You verified your PIN recently, so they are currently unlocked. You can remove PIN protection below."
+                        hasPin -> "Your notes are protected. You verified your PIN recently, so they are currently unlocked. Enter your current PIN to remove protection."
                         else -> "Create a 4-digit PIN to protect your notes from unauthorized access"
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -136,7 +142,14 @@ fun AppLockScreen(
                 )
             }
 
-            // PIN Field Card (only if setting up or locked)
+            // PIN Field Card (shown in all three states: setting up, locked,
+            // and "active but about to remove" — the last one needs the
+            // current PIN to be re-entered server-side).
+            val pinFieldLabel = when {
+                isLocked -> "Enter 4-digit PIN"
+                !hasPin -> "Enter 4-digit PIN"
+                else -> "Enter current 4-digit PIN"
+            }
             if (!hasPin || isLocked) {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -159,7 +172,7 @@ fun AppLockScreen(
                                     pin = it
                                 }
                             },
-                            label = { Text("Enter 4-digit PIN") },
+                            label = { Text(pinFieldLabel) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
                             visualTransformation = PasswordVisualTransformation(),
@@ -189,6 +202,62 @@ fun AppLockScreen(
                                 modifier = Modifier
                                     .align(Alignment.CenterHorizontally)
                                     .size(24.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // PIN field for the "active / about to remove" state. Reusing
+            // the same `pin` state var as the other two states — the
+            // button below passes it to onRemove() which re-verifies it
+            // server-side.
+            if (hasPin && !isLocked) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        if (error != null) ErrorRed.copy(alpha = 0.5f)
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                    ),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = pin,
+                            onValueChange = {
+                                if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                                    pin = it
+                                    // Clear stale errors the moment the
+                                    // user starts typing a new PIN.
+                                    if (error != null) onClearError()
+                                }
+                            },
+                            label = { Text("Current 4-digit PIN") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            isError = error != null,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = if (error != null) ErrorRed else BrandOrange,
+                                unfocusedBorderColor = if (error != null) ErrorRed.copy(alpha = 0.5f)
+                                                          else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                focusedLabelColor = if (error != null) ErrorRed else BrandOrange
+                            )
+                        )
+
+                        if (error != null) {
+                            Text(
+                                text = error,
+                                color = ErrorRed,
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
                     }
@@ -234,10 +303,10 @@ fun AppLockScreen(
                 } else {
                     Button(
                         onClick = {
-                            onRemove()
+                            onRemove(pin)
                             pin = ""
                         },
-                        enabled = !isLoading,
+                        enabled = pin.length == 4 && !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
@@ -250,6 +319,43 @@ fun AppLockScreen(
                     ) {
                         Text("Remove PIN Protection", fontWeight = FontWeight.Bold)
                     }
+                }
+
+                // "Forgot PIN?" recovery link. Shown in both the locked
+                // and the "about to remove" states (anywhere a current
+                // PIN is required). Opens the website's PIN reset flow on
+                // profile_settings — the same flow the website uses, so
+                // we don't have to re-implement the email-code + new-PIN
+                // wizard inside the app.
+                if (hasPin) {
+                    val username = SessionManager.username
+                    val resetUrl = if (!username.isNullOrBlank()) {
+                        "https://echowithin.xyz/profile/$username/settings"
+                    } else {
+                        "https://echowithin.xyz"
+                    }
+                    Text(
+                        text = "Forgot PIN? Reset on the website",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = BrandOrange,
+                        fontWeight = FontWeight.SemiBold,
+                        textDecoration = TextDecoration.Underline,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                try {
+                                    val intent = android.content.Intent(
+                                        android.content.Intent.ACTION_VIEW,
+                                        android.net.Uri.parse(resetUrl)
+                                    ).apply {
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
+                            .padding(vertical = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                 }
             }
         }

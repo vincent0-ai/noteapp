@@ -55,12 +55,24 @@ class AppLockViewModel(
         }
     }
 
-    fun remove() {
+    fun remove(pin: String) {
+        if (pin.length != 4) {
+            uiState = uiState.copy(error = "Enter your current 4-digit PIN to remove protection.")
+            return
+        }
         uiState = uiState.copy(isLoading = true, error = null)
         viewModelScope.launch {
-            repository.removeLock()
+            repository.removeLock(pin)
                 .onSuccess { uiState = uiState.copy(isLoading = false, hasPin = false, isLocked = false) }
                 .onFailure { uiState = uiState.copy(isLoading = false, error = it.message ?: "Could not remove lock") }
+        }
+    }
+
+    /** Clear the error message — called from the screen when the user
+     *  starts typing a new PIN so the red error text disappears. */
+    fun clearError() {
+        if (uiState.error != null) {
+            uiState = uiState.copy(error = null)
         }
     }
 

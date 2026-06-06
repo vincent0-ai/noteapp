@@ -219,6 +219,10 @@ data class AppLockVerifyDto(
     val pin: String
 )
 
+data class AppLockRemoveDto(
+    val pin: String
+)
+
 data class AppLockStatusDto(
     val unlocked: Boolean = false,
     val has_pin: Boolean = false,

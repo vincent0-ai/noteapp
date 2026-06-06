@@ -209,10 +209,16 @@ fun AppNavGraph(
             // Auto-sync when the view-model pings the trigger (debounced
             // reconnect logic). Pull the value into a local so
             // collectAsState() subscribes us to updates.
+            // Gated on syncMode == "automatic" as defense in depth — the
+            // view-model also gates onConnectivityChanged() the same way,
+            // but if anything else ever pings the trigger we still respect
+            // the user's manual-sync preference.
             val syncTriggerState = notesViewModel.syncTrigger.collectAsState()
             val syncTrigger = syncTriggerState.value
             LaunchedEffect(syncTrigger) {
-                if (syncTrigger > 0L && isOnline) {
+                if (syncTrigger > 0L && isOnline &&
+                    com.example.echowithin.data.network.SessionManager.syncMode == "automatic"
+                ) {
                     notesViewModel.syncNotes()
                 }
             }
@@ -300,7 +306,8 @@ fun AppNavGraph(
                 error = appLockViewModel.uiState.error,
                 onSetup = { appLockViewModel.setup(it) },
                 onVerify = { appLockViewModel.verify(it) },
-                onRemove = { appLockViewModel.remove() }
+                onRemove = { appLockViewModel.remove(it) },
+                onClearError = { appLockViewModel.clearError() }
             )
         }
 

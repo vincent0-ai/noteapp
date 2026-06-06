@@ -115,7 +115,7 @@ interface EchoWithinApiService {
     suspend fun checkLockStatus(): AppLockStatusDto
 
     @POST("api/v1/app_lock/remove")
-    suspend fun removeAppLock(): GenericResponse
+    suspend fun removeAppLock(@Body body: AppLockRemoveDto): GenericResponse
 
 
     @POST("api/v1/register")
@@ -143,16 +143,26 @@ interface EchoWithinApiService {
     @POST("api/v1/premium/activate")
     suspend fun activatePremium(): GenericResponse
 
-    @GET("api/notifications/badge-counts")
+    // SECURITY/CONTRACT NOTE: These four endpoints exist in two flavors
+    // on the server:
+    //   • /api/<path>          — legacy blueprint, CSRF-protected (POSTs
+    //                            would 400 from the Android client because
+    //                            it doesn't send a CSRF token).
+    //   • /api/v1/<path>       — api_bp blueprint, fully CSRF-exempt
+    //                            (see main.py: csrf.exempt(api_bp)),
+    //                            contract and data model identical.
+    // The Android client must always hit the v1 versions.
+
+    @GET("api/v1/notifications/badge-counts")
     suspend fun getBadgeCounts(): BadgeCountsDto
 
-    @GET("api/posts/my-commented")
+    @GET("api/v1/posts/my-commented")
     suspend fun getNotifications(): NotificationsResponseDto
 
-    @POST("api/posts/mark-all-read")
+    @POST("api/v1/posts/mark-all-read")
     suspend fun markAllPostsRead(): GenericResponse
 
-    @POST("api/activity/mark_read")
+    @POST("api/v1/activity/mark_read")
     suspend fun markAllProposalsRead(): GenericResponse
 
     @POST("api/v1/notes/dedup")

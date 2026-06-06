@@ -98,21 +98,28 @@ class AppLockRepository {
         }
     }
 
-    suspend fun removeLock(): Result<Unit> {
+    suspend fun removeLock(pin: String): Result<Unit> {
+        val hash = pin.sha256()
         return runCatching {
-            val response = api.removeAppLock()
+            val response = api.removeAppLock(AppLockRemoveDto(pin = pin))
             if (!response.success) {
                 throw IllegalStateException(response.error ?: "Could not remove lock")
             }
         }.onSuccess {
-            // Only clear on successful ONLINE server response
+            // Only clear local state on successful ONLINE server response.
+            // The server has re-verified the PIN and removed the hash; the
+            // local mirror is now safe to wipe.
             SessionManager.localPinHash = null
             SessionManager.localHasPin = false
             SessionManager.localPinConfigured = false
         }.recover { exception ->
             if (exception is java.io.IOException) {
-                // SECURITY: Block offline PIN removal entirely.
-                // This prevents an attacker from removing the PIN while offline.
+                // SECURITY: Block offline PIN removal entirely. The PIN
+                // hash is stored server-side, so a removal that only
+                // touches local state would re-enable protection on the
+                // next /check_status round-trip and leave the user thinking
+                // they're unprotected when they aren't. Require the
+                // request to actually reach the server.
                 throw IllegalStateException("Cannot remove PIN while offline. Please connect to the internet.")
             } else {
                 throw exception
