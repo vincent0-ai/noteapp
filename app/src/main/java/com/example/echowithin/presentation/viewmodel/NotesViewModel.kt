@@ -76,6 +76,11 @@ class NotesViewModel(
     private val _syncTrigger = MutableStateFlow(0L)
     val syncTrigger: StateFlow<Long> = _syncTrigger.asStateFlow()
 
+    /** Timestamp of last automatic sync to enforce periodic-only behaviour. */
+    private var lastAutoSyncAt = 0L
+    /** Minimum interval between automatic syncs (30 minutes). */
+    private val autoSyncIntervalMs = 30 * 60 * 1000L
+
     /** Toasts/errors that survive recomposition but are shown exactly once. */
     var ephemeralMessage by mutableStateOf<String?>(null)
         private set
@@ -97,7 +102,11 @@ class NotesViewModel(
             val updateManager = com.example.echowithin.data.network.AppUpdateManager(context)
             val info = updateManager.checkForUpdates()
             if (info.hasUpdate) {
-                uiState = uiState.copy(updateInfo = info)
+                // Don't re-show update dialog for a version the user already dismissed
+                val dismissedCode = com.example.echowithin.data.network.SessionManager.dismissedUpdateCode
+                if (info.versionCode > dismissedCode) {
+                    uiState = uiState.copy(updateInfo = info)
+                }
             } else if (showToastIfLatest) {
                 android.widget.Toast.makeText(
                     context,
@@ -122,6 +131,10 @@ class NotesViewModel(
     }
 
     fun dismissUpdate() {
+        // Persist the dismissed version code so we don't re-show for the same version
+        uiState.updateInfo?.let { info ->
+            com.example.echowithin.data.network.SessionManager.dismissedUpdateCode = info.versionCode
+        }
         uiState = uiState.copy(updateInfo = null, downloadProgress = null)
     }
 
@@ -162,7 +175,9 @@ class NotesViewModel(
      *
      * Respects the user's syncMode preference: in "manual" mode, reconnecting
      * does NOT auto-push pending changes — the user has to tap the Sync
-     * button. The pending count is still surfaced to the UI so the offline
+     * button. In "automatic" mode, sync only runs periodically (every 30
+     * minutes) to avoid excessive network usage, not on every reconnect.
+     * The pending count is still surfaced to the UI so the offline
      * banner can show "N changes pending".
      */
     fun onConnectivityChanged(isOnline: Boolean) {
@@ -171,8 +186,12 @@ class NotesViewModel(
         viewModelScope.launch {
             val pending = pendingSyncCount()
             uiState = uiState.copy(pendingSyncCount = pending)
-            if (isAutomatic && (pending > 0 || hasToken())) {
-                _syncTrigger.value = System.currentTimeMillis()
+            if (isAutomatic) {
+                val now = System.currentTimeMillis()
+                if (now - lastAutoSyncAt >= autoSyncIntervalMs) {
+                    lastAutoSyncAt = now
+                    _syncTrigger.value = now
+                }
             }
         }
     }
@@ -641,6 +660,14 @@ class NotesViewModel(
      */
     fun hasOfflineNotes(): Boolean = runBlocking {
         repository.getOfflineNotesCount() > 0
+    }
+
+    /**
+     * Returns the count of offline-only notes (created before login).
+     * Safe to call from withContext(Dispatchers.IO).
+     */
+    suspend fun getOfflineNotesCount(): Int {
+        return repository.getOfflineNotesCount()
     }
 
     /**

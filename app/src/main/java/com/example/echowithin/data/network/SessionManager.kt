@@ -54,6 +54,21 @@ object SessionManager {
             prefs?.edit()?.putInt(KEY_TRIAL_DAYS_REMAINING, value)?.apply()
         }
 
+    private const val KEY_DISMISSED_UPDATE_CODE = "dismissed_update_code"
+    private const val KEY_OFFLINE_PRIVACY_SHOWN = "offline_privacy_shown"
+
+    var dismissedUpdateCode: Int
+        get() = prefs?.getInt(KEY_DISMISSED_UPDATE_CODE, -1) ?: -1
+        set(value) {
+            prefs?.edit()?.putInt(KEY_DISMISSED_UPDATE_CODE, value)?.apply()
+        }
+
+    var offlinePrivacyShown: Boolean
+        get() = prefs?.getBoolean(KEY_OFFLINE_PRIVACY_SHOWN, false) ?: false
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_OFFLINE_PRIVACY_SHOWN, value)?.apply()
+        }
+
     private const val KEY_LOCAL_PIN_HASH = "local_pin_hash"
     private const val KEY_LOCAL_HAS_PIN = "local_has_pin"
     private const val KEY_LOCAL_PIN_CONFIGURED = "local_pin_configured"

@@ -15,6 +15,7 @@ import java.io.FileOutputStream
 
 data class UpdateInfo(
     val hasUpdate: Boolean,
+    val versionCode: Int,
     val versionName: String,
     val apkUrl: String,
     val changelog: String
@@ -28,10 +29,10 @@ class AppUpdateManager(private val context: Context) {
         try {
             val request = Request.Builder().url(manifestUrl).build()
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) return@withContext UpdateInfo(false, "", "", "")
+            if (!response.isSuccessful) return@withContext UpdateInfo(false, -1, "", "", "")
 
             val bodyString = response.body?.string().orEmpty()
-            if (bodyString.isBlank()) return@withContext UpdateInfo(false, "", "", "")
+            if (bodyString.isBlank()) return@withContext UpdateInfo(false, -1, "", "", "")
 
             val json = JSONObject(bodyString)
             val serverVersionCode = json.getInt("versionCode")
@@ -42,10 +43,10 @@ class AppUpdateManager(private val context: Context) {
             val currentVersionCode = BuildConfig.VERSION_CODE
             val hasUpdate = serverVersionCode > currentVersionCode
 
-            UpdateInfo(hasUpdate, serverVersionName, apkUrl, changelog)
+            UpdateInfo(hasUpdate, serverVersionCode, serverVersionName, apkUrl, changelog)
         } catch (e: Exception) {
             e.printStackTrace()
-            UpdateInfo(false, "", "", "")
+            UpdateInfo(false, -1, "", "", "")
         }
     }
 

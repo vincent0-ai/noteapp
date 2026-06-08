@@ -6,7 +6,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavType
 import androidx.navigation.NavHostController
@@ -228,6 +231,25 @@ fun AppNavGraph(
                 }
             }
             val isOfflineMode = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
+
+            // Offline notes count for backup prompt
+            var offlineNotesCount by remember { mutableIntStateOf(0) }
+            LaunchedEffect(isOfflineMode) {
+                if (isOfflineMode) {
+                    offlineNotesCount = withContext(Dispatchers.IO) {
+                        notesViewModel.getOfflineNotesCount()
+                    }
+                }
+            }
+
+            // Offline privacy dialog — show once per offline session
+            var showOfflinePrivacyDialog by remember { mutableStateOf(false) }
+            LaunchedEffect(isOfflineMode) {
+                if (isOfflineMode && !SessionManager.offlinePrivacyShown) {
+                    showOfflinePrivacyDialog = true
+                }
+            }
+
             HomeScreen(
                 notes = notesViewModel.uiState.notes,
                 isLoading = notesViewModel.uiState.isLoading,
@@ -296,6 +318,13 @@ fun AppNavGraph(
                         android.widget.Toast.makeText(context, "Backed up $count offline note${if (count > 1) "s" else ""}!", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }},
+                offlineNotesCount = offlineNotesCount,
+                // Offline privacy dialog
+                showOfflinePrivacyDialog = showOfflinePrivacyDialog,
+                onDismissOfflinePrivacy = {
+                    showOfflinePrivacyDialog = false
+                    SessionManager.offlinePrivacyShown = true
+                },
                 // Update-related
                 updateInfo = notesViewModel.uiState.updateInfo,
                 downloadProgress = notesViewModel.uiState.downloadProgress,

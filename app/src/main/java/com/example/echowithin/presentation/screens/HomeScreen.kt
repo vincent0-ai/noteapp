@@ -104,6 +104,10 @@ fun HomeScreen(
     isOfflineMode: Boolean = false,
     // Offline notes backup prompt
     onBackupOfflineNotes: (() -> Unit)? = null,
+    offlineNotesCount: Int = 0,
+    // Privacy info dialog for offline users
+    showOfflinePrivacyDialog: Boolean = false,
+    onDismissOfflinePrivacy: () -> Unit = {},
     // Navigation
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -134,22 +138,19 @@ fun HomeScreen(
 
     // Offline notes backup prompt — show once when user logs in and has offline notes
     var showBackupPrompt by remember { mutableStateOf(false) }
-    LaunchedEffect(isOnline, isOfflineMode) {
-        if (isOnline && !isOfflineMode && onBackupOfflineNotes != null) {
+    LaunchedEffect(isOnline, isOfflineMode, offlineNotesCount) {
+        if (isOnline && !isOfflineMode && onBackupOfflineNotes != null && offlineNotesCount > 0) {
             // Small delay to let UI settle after login
             delay(1500)
-            // Check if there are offline notes to backup
-            // We can't call ViewModel directly here, but the callback will check
             showBackupPrompt = true
         }
     }
 
     if (showBackupPrompt) {
-        val context = LocalContext.current
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { showBackupPrompt = false },
             title = { Text("Backup your offline notes?") },
-            text = { Text("You have notes created while offline. Would you like to back them up to your account now? They'll be synced securely and available on all your devices.") },
+            text = { Text("You have $offlineNotesCount note${if (offlineNotesCount == 1) "" else "s"} created while offline. Would you like to back them up to your account now? They'll be synced securely and available on all your devices.") },
             confirmButton = {
                 TextButton(onClick = { showBackupPrompt = false; onBackupOfflineNotes?.invoke() }) {
                     Text("Back Up Now")
@@ -158,6 +159,50 @@ fun HomeScreen(
             dismissButton = {
                 TextButton(onClick = { showBackupPrompt = false }) {
                     Text("Later")
+                }
+            }
+        )
+    }
+
+    // Offline privacy info dialog — shown once when user enters offline mode
+    if (showOfflinePrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = onDismissOfflinePrivacy,
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.CloudOff,
+                        contentDescription = "Offline Mode",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                    )
+                    Text("Complete Privacy Mode")
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "You're using EchoWithin in offline mode. Here's what that means:",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("🔒 Notes never leave your device", style = MaterialTheme.typography.bodyMedium)
+                    Text("🔍 Full-text search works offline", style = MaterialTheme.typography.bodyMedium)
+                    Text("📝 Create, edit, organize freely", style = MaterialTheme.typography.bodyMedium)
+                    Text("🔐 PIN lock protects your notes", style = MaterialTheme.typography.bodyMedium)
+                    Text("📤 Export notes anytime (PDF, text)", style = MaterialTheme.typography.bodyMedium)
+                    Text("🚫 No account, no tracking, no ads", style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Sign in anytime to sync your notes across devices.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = onDismissOfflinePrivacy) {
+                    Text("Got it")
                 }
             }
         )
