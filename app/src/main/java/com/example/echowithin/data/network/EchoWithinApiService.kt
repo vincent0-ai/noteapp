@@ -15,6 +15,9 @@ interface EchoWithinApiService {
     @POST("api/v1/app_reauth")
     suspend fun appReauth(): LoginResponse
 
+    @POST("api/v1/auth/refresh")
+    suspend fun refreshToken(): LoginResponse
+
     @GET("api/v1/notes")
     suspend fun getNotes(
         @Query("page") page: Int = 1,

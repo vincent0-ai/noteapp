@@ -249,6 +249,40 @@ class NotesRepository {
         return dbHelper.getAllNotes()
     }
 
+    /**
+     * Returns notes that were created locally while offline (no account).
+     * These are notes with "local_*" IDs that have never been synced.
+     */
+    suspend fun getOfflineNotes(): List<AppNote> = withContext(Dispatchers.IO) {
+        runCatching {
+            dbHelper.getAllNotes().filter { it.id.startsWith("local_") && it.pendingOp == "none" }
+        }.getOrNull() ?: emptyList()
+    }
+
+    /**
+     * Count of offline-only notes (created before any login).
+     */
+    suspend fun getOfflineNotesCount(): Int = withContext(Dispatchers.IO) {
+        runCatching {
+            dbHelper.getAllNotes().count { it.id.startsWith("local_") && it.pendingOp == "none" }
+        }.getOrNull() ?: 0
+    }
+
+    /**
+     * Marks all offline-only notes for backup by changing pendingOp to "create".
+     * Returns the number of notes marked for backup.
+     */
+    suspend fun markOfflineNotesForBackup(): Int = withContext(Dispatchers.IO) {
+        runCatching {
+            val offlineNotes = dbHelper.getAllNotes().filter { it.id.startsWith("local_") && it.pendingOp == "none" }
+            for (note in offlineNotes) {
+                val updatedNote = note.copy(pendingOp = "create", isSynced = false)
+                dbHelper.saveNote(updatedNote, isSynced = false, pendingOp = "create")
+            }
+            offlineNotes.size
+        }.getOrNull() ?: 0
+    }
+
     suspend fun searchNotes(query: String): Result<SearchResultsDto> = withContext(Dispatchers.IO) {
         runCatching {
             try {
@@ -377,13 +411,20 @@ class NotesRepository {
     }
 
     fun clearLocalData() {
-        // Wipe the local cache on logout / 401 / splash token check. The
-        // previous implementation called clearSyncFlags() which marked every
-        // row as is_synced=0 + pending_op="none" and caused the sync loop to
-        // re-push every already-synced note as a new CREATE (duplicate-notes
-        // bug). Doing a full clear here means the next login starts from a
-        // clean slate and the pull step simply repopulates from the server.
+        // Full wipe — used on explicit logout, account deletion, or when user
+        // wants to start completely fresh. Removes everything including
+        // offline-only notes.
         dbHelper.clearAll()
+    }
+
+    /**
+     * Clears only server-synced notes and pending changes, but preserves
+     * offline-only notes (created via "Continue Offline" or while logged out).
+     * Used on session expiry/401 so the user doesn't lose their private
+     * local notes when the session dies.
+     */
+    fun clearOfflineData() {
+        dbHelper.clearSyncedNotes()
     }
 
     fun wipeAllData() {

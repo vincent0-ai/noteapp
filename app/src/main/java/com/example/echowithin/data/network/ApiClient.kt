@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
 
-object ApiClient {
+    object ApiClient {
     /** Set by the Compose navigation layer. Invoked on any HTTP 401 response. */
     var onUnauthorized: (() -> Unit)? = null
 
@@ -26,6 +26,9 @@ object ApiClient {
 
     @Volatile
     private var lastUnauthorizedTime = 0L
+
+    @Volatile
+    private var isRefreshingToken = false
 
     private interface ClearableCookieJar : CookieJar {
         fun clear()
@@ -183,9 +186,10 @@ object ApiClient {
                 val path = originalRequest.url.encodedPath
                 val isAuthEndpoint = path.contains("/login") || 
                                      path.contains("/register") || 
-                                     path.contains("/app_reauth")
+                                     path.contains("/app_reauth") ||
+                                     path.contains("/auth/refresh")
                 
-                // Detect 401 Unauthorized → invoke callback to clear session & redirect
+                // Detect 401 Unauthorized → attempt token refresh before clearing session
                 if (response.code == 401 && !isAuthEndpoint) {
                     val now = System.currentTimeMillis()
                     val shouldTrigger = synchronized(this) {
@@ -197,6 +201,39 @@ object ApiClient {
                         }
                     }
                     if (shouldTrigger) {
+                        // Try to refresh token first (only once per 401 cascade)
+                        val shouldRefresh = synchronized(this) {
+                            if (!isRefreshingToken) {
+                                isRefreshingToken = true
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        if (shouldRefresh) {
+                            try {
+                                // Run suspend function in a coroutine scope
+                                val refreshResponse = kotlinx.coroutines.runBlocking {
+                                    apiService.refreshToken()
+                                }
+                                if (refreshResponse.success && refreshResponse.x_app_token != null) {
+                                    // Token refreshed! Update session and retry original request
+                                    SessionManager.token = refreshResponse.x_app_token
+                                    SessionManager.username = refreshResponse.username
+                                    isRefreshingToken = false
+                                    
+                                    // Retry the original request with new token
+                                    val newRequest = originalRequest.newBuilder()
+                                        .header("X-App-Token", refreshResponse.x_app_token!!)
+                                        .build()
+                                    return@addInterceptor chain.proceed(newRequest)
+                                }
+                            } catch (_: Exception) {
+                                // Refresh failed, fall through to logout
+                            }
+                            isRefreshingToken = false
+                        }
+                        // Refresh failed or already attempted → clear session
                         onUnauthorized?.invoke()
                     }
                 }

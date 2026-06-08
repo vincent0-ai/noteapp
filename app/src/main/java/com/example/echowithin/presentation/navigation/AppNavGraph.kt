@@ -68,63 +68,60 @@ fun AppNavGraph(
     }
 
     // Validate session then load data on launch
-    LaunchedEffect(Unit) {
-        if (notesViewModel.isInitialDataLoaded) return@LaunchedEffect
-        notesViewModel.checkForUpdates(context)
-        if (SessionManager.token != null) {
-            try {
-                // Call appReauth to verify session/token on server
-                withContext(Dispatchers.IO) {
-                    ApiClient.apiService.appReauth()
-                }
+            LaunchedEffect(Unit) {
+                if (notesViewModel.isInitialDataLoaded) return@LaunchedEffect
+                notesViewModel.checkForUpdates(context)
+                if (SessionManager.token != null) {
+                    try {
+                        // Call appReauth to verify session/token on server
+                        withContext(Dispatchers.IO) {
+                            ApiClient.apiService.appReauth()
+                        }
 
-                // Session token is valid! Register FCM token if permission granted
-                val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                        context,
-                        android.Manifest.permission.POST_NOTIFICATIONS
-                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                } else {
-                    true
-                }
+                        // Session token is valid! Register FCM token if permission granted
+                        val hasPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            androidx.core.content.ContextCompat.checkSelfPermission(
+                                context,
+                                android.Manifest.permission.POST_NOTIFICATIONS
+                            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        } else {
+                            true
+                        }
 
-                if (hasPermission) {
-                    ApiClient.registerFcmToken(context)
-                } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                }
+                        if (hasPermission) {
+                            ApiClient.registerFcmToken(context)
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                        }
 
-                // Token is valid! Update account tier, then load notes.
-                try {
-                    val profile = withContext(Dispatchers.IO) {
-                        ApiClient.apiService.getProfile()
+                        // Token is valid! Update account tier, then load notes.
+                        try {
+                            val profile = withContext(Dispatchers.IO) {
+                                ApiClient.apiService.getProfile()
+                            }
+                            SessionManager.accountTier = profile.account_tier
+                        } catch (_: Exception) { }
+                        // Session confirmed — now it's safe to load notes and lock status
+                        notesViewModel.loadAllData()
+                        appLockViewModel.refreshStatus()
+                    } catch (e: retrofit2.HttpException) {
+                        // ANY HTTP error from appReauth means the session is suspect.
+                        // Treat it as invalid/expired — redirect to Welcome.
+                        // This prevents logout loops from 5xx, 429, 400, etc.
+                        SessionManager.clear()
+                        notesViewModel.clearOfflineData() // Preserves offline-only notes
+                        navController.navigate(AppRoute.Welcome) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    } catch (_: Exception) {
+                        // Network error — load from local DB only, keep token for retry
+                        notesViewModel.loadNotes()
                     }
-                    SessionManager.accountTier = profile.account_tier
-                } catch (_: Exception) { }
-                // Session confirmed — now it's safe to load notes and lock status
-                notesViewModel.loadAllData()
-                appLockViewModel.refreshStatus()
-            } catch (e: retrofit2.HttpException) {
-                if (e.code() == 401 || e.code() == 403) {
-                    // Token is invalid/expired — redirect to Welcome
-                    SessionManager.clear()
-                    notesViewModel.clearLocalData()
-                    navController.navigate(AppRoute.Welcome) {
-                        popUpTo(0) { inclusive = true }
-                    }
                 } else {
-                    // Other HTTP error — still load local notes
+                    // No token — load whatever is in local DB
                     notesViewModel.loadNotes()
                 }
-            } catch (_: Exception) {
-                // Network error — load from local DB only
-                notesViewModel.loadNotes()
             }
-        } else {
-            // No token — load whatever is in local DB
-            notesViewModel.loadNotes()
-        }
-    }
 
     NavHost(
         navController = navController,
@@ -230,6 +227,7 @@ fun AppNavGraph(
                     notesViewModel.consumeEphemeralMessage()
                 }
             }
+            val isOfflineMode = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
             HomeScreen(
                 notes = notesViewModel.uiState.notes,
                 isLoading = notesViewModel.uiState.isLoading,
@@ -238,7 +236,7 @@ fun AppNavGraph(
                 onNoteClick = { noteId -> navController.navigate(AppRoute.detail(noteId)) },
                 onNewNoteClick = { navController.navigate(AppRoute.editor(noteId = null)) },
                 onSyncClick = {
-                    if (SessionManager.token.isNullOrBlank() || SessionManager.token == "null") {
+                    if (isOfflineMode) {
                         android.widget.Toast.makeText(context, "Sign in or create an account to sync notes!", android.widget.Toast.LENGTH_SHORT).show()
                     } else {
                         notesViewModel.syncNotes()
@@ -290,6 +288,14 @@ fun AppNavGraph(
                 isOnline = isOnline,
                 pendingSyncCount = notesViewModel.uiState.pendingSyncCount,
                 lastSyncedAt = notesViewModel.uiState.lastSyncedAt,
+                // Offline mode flag
+                isOfflineMode = isOfflineMode,
+                // Offline notes backup
+                onBackupOfflineNotes = { notesViewModel.backupOfflineNotes { count ->
+                    if (count > 0) {
+                        android.widget.Toast.makeText(context, "Backed up $count offline note${if (count > 1) "s" else ""}!", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }},
                 // Update-related
                 updateInfo = notesViewModel.uiState.updateInfo,
                 downloadProgress = notesViewModel.uiState.downloadProgress,

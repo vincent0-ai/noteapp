@@ -288,4 +288,23 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         val db = writableDatabase
         db.delete(TABLE_NOTES, null, null)
     }
+
+    /**
+     * Deletes only server-synced notes and pending changes, preserving
+     * offline-only notes (local_* IDs or never-synced notes with no pending op).
+     * Used on session expiry/401 so the user retains their private local notes.
+     */
+    fun clearSyncedNotes() {
+        val db = writableDatabase
+        // Delete notes that are either:
+        // - is_synced = 1 (fully synced with server)
+        // - id does NOT start with 'local_' (i.e., real server IDs)
+        // - pending_op != 'none' (pending create/edit/delete that was meant to sync)
+        // Keep only: local_* notes with is_synced=0 AND pending_op='none'
+        db.delete(
+            TABLE_NOTES,
+            "$COLUMN_IS_SYNCED = 1 OR ($COLUMN_ID NOT LIKE 'local_%' AND $COLUMN_PENDING_OP != 'none')",
+            null
+        )
+    }
 }

@@ -16,6 +16,9 @@ import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.components.EchoWithinLogoBadge
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.CloudOff
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -80,6 +83,48 @@ fun WelcomeScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Offline mode benefits card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.3f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = androidx.compose.material.icons.Icons.Default.Shield,
+                                contentDescription = "Privacy",
+                                tint = BrandOrange,
+                                modifier = Modifier.size(24.dp).padding(end = 8.dp)
+                            )
+                            Text(
+                                text = "Complete Privacy Mode",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = BrandOrange
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(start = 32.dp)
+                        ) {
+                            BenefitRow("🔒", "Notes never leave your device")
+                            BenefitRow("🔍", "Full-text search works offline")
+                            BenefitRow("📝", "Create, edit, organize freely")
+                            BenefitRow("🔐", "PIN lock protects your notes")
+                            BenefitRow("📤", "Export notes anytime (PDF, text)")
+                            BenefitRow("🚫", "No account, no tracking, no ads")
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
 
                 // Affiliate text
@@ -134,13 +179,46 @@ fun WelcomeScreen(
                         contentColor = BrandOrange
                     )
                 ) {
-                    Text(
-                        text = "Continue Offline",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = androidx.compose.material.icons.Icons.Default.CloudOff,
+                            contentDescription = "Offline",
+                            modifier = Modifier.size(20.dp).padding(end = 8.dp)
+                        )
+                        Text(
+                            text = "Continue Offline",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
+                
+                Text(
+                    text = "✦ Your notes. Your device. Your rules. ✦",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
         }
+    }
+}
+
+@Composable
+private fun BenefitRow(icon: String, text: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Text(text = icon, fontSize = 18.sp, modifier = Modifier.padding(end = 12.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -22,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import com.example.echowithin.data.model.AppNote
+import kotlinx.coroutines.delay
 import com.example.echowithin.data.model.ProposalDto
 import com.example.echowithin.data.model.ShareDto
 import com.example.echowithin.data.model.NotificationDto
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
@@ -97,11 +100,23 @@ fun HomeScreen(
     isOnline: Boolean = true,
     pendingSyncCount: Int = 0,
     lastSyncedAt: Long = 0L,
+    // Offline mode (no auth token) - hides Activity, Shared Links, sync features
+    isOfflineMode: Boolean = false,
+    // Offline notes backup prompt
+    onBackupOfflineNotes: (() -> Unit)? = null,
     // Navigation
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var activeTab by remember { mutableStateOf(HomeTab.NOTES) }
+    // Tabs available in offline mode: only Notes and Locked
+    val availableTabs = remember(isOfflineMode) {
+        if (isOfflineMode) listOf(HomeTab.NOTES, HomeTab.LOCKED)
+        else HomeTab.entries.toList()
+    }
+    
+    var activeTab by remember { mutableStateOf(availableTabs.first()) }
+    // If current tab becomes unavailable (e.g., went offline while on Activity), switch to Notes
+    if (activeTab !in availableTabs) activeTab = availableTabs.first()
 
     // Memoize filtered lists to avoid creating new List instances on every recomposition
     val unlockedNotes = remember(notes) { notes.filter { !it.isLocked } }
@@ -117,15 +132,68 @@ fun HomeScreen(
         )
     }
 
+    // Offline notes backup prompt — show once when user logs in and has offline notes
+    var showBackupPrompt by remember { mutableStateOf(false) }
+    LaunchedEffect(isOnline, isOfflineMode) {
+        if (isOnline && !isOfflineMode && onBackupOfflineNotes != null) {
+            // Small delay to let UI settle after login
+            delay(1500)
+            // Check if there are offline notes to backup
+            // We can't call ViewModel directly here, but the callback will check
+            showBackupPrompt = true
+        }
+    }
+
+    if (showBackupPrompt) {
+        val context = LocalContext.current
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showBackupPrompt = false },
+            title = { Text("Backup your offline notes?") },
+            text = { Text("You have notes created while offline. Would you like to back them up to your account now? They'll be synced securely and available on all your devices.") },
+            confirmButton = {
+                TextButton(onClick = { showBackupPrompt = false; onBackupOfflineNotes?.invoke() }) {
+                    Text("Back Up Now")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBackupPrompt = false }) {
+                    Text("Later")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { EchoWithinTopBarTitle() },
                 actions = {
+                    // Offline mode indicator
+                    if (isOfflineMode) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudOff,
+                                contentDescription = "Offline Mode",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Offline",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                maxLines = 1
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     // "Last synced Xm ago" — only when we actually have a
                     // timestamp and we're online. Cheap reassurance that
                     // the device is up to date.
-                    if (lastSyncedAt > 0L && isOnline) {
+                    if (lastSyncedAt > 0L && isOnline && !isOfflineMode) {
                         Text(
                             text = "Synced ${formatLastSynced(lastSyncedAt)}",
                             style = MaterialTheme.typography.labelSmall,
@@ -145,7 +213,7 @@ fun HomeScreen(
                             Icon(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Sync Notes",
-                                tint = if (isOnline) MaterialTheme.colorScheme.onSurface
+                                tint = if (isOnline && !isOfflineMode) MaterialTheme.colorScheme.onSurface
                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                             )
                         }
@@ -189,12 +257,12 @@ fun HomeScreen(
 
             // Tab Row
             ScrollableTabRow(
-                selectedTabIndex = activeTab.ordinal,
+                selectedTabIndex = availableTabs.indexOf(activeTab),
                 containerColor = MaterialTheme.colorScheme.background,
                 contentColor = MaterialTheme.colorScheme.primary,
                 edgePadding = 8.dp
             ) {
-                HomeTab.entries.forEach { tab ->
+                availableTabs.forEach { tab ->
                     Tab(
                         selected = activeTab == tab,
                         onClick = { activeTab = tab },
@@ -248,7 +316,7 @@ fun HomeScreen(
                     onNoteClick = onNoteClick,
                     onSyncNoteClick = onSyncNoteClick
                 )
-                HomeTab.ACTIVITY -> ActivityTabContent(
+                HomeTab.ACTIVITY -> if (HomeTab.ACTIVITY in availableTabs) ActivityTabContent(
                     proposals = proposals,
                     proposalsLoading = proposalsLoading,
                     notifications = notifications,
@@ -257,12 +325,26 @@ fun HomeScreen(
                     onRejectProposal = onRejectProposal,
                     onMarkAllRead = onMarkAllRead,
                     markingAllRead = markingAllRead
+                ) else NotesTabContent(
+                    notes = unlockedNotes,
+                    isLoading = isLoading,
+                    error = error,
+                    onNoteClick = onNoteClick,
+                    onRetryClick = onRetryClick,
+                    onSyncNoteClick = onSyncNoteClick
                 )
-                HomeTab.SHARED_LINKS -> SharedLinksTabContent(
+                HomeTab.SHARED_LINKS -> if (HomeTab.SHARED_LINKS in availableTabs) SharedLinksTabContent(
                     activeShares = activeShares,
                     sharesLoading = sharesLoading,
                     onManageShares = onManageShares,
                     onOpenShareLink = onOpenShareLink
+                ) else NotesTabContent(
+                    notes = unlockedNotes,
+                    isLoading = isLoading,
+                    error = error,
+                    onNoteClick = onNoteClick,
+                    onRetryClick = onRetryClick,
+                    onSyncNoteClick = onSyncNoteClick
                 )
             }
         }

@@ -44,11 +44,19 @@ fun EchoWithinApp() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
     
-    // Bottom bar is shown on the 4 main home tabs
-    val showBottomBar = currentRoute == AppRoute.Home ||
-        currentRoute == AppRoute.Search ||
-        currentRoute == AppRoute.Premium ||
-        currentRoute == AppRoute.Settings
+    // Check if user is in offline mode (no auth token)
+    val isOfflineMode = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() ||
+        com.example.echowithin.data.network.SessionManager.token == "null"
+    
+    // Bottom bar tabs: offline mode hides Premium (requires server)
+    val bottomTabs = if (isOfflineMode) {
+        listOf(AppRoute.Home, AppRoute.Search, AppRoute.Settings)
+    } else {
+        listOf(AppRoute.Home, AppRoute.Search, AppRoute.Premium, AppRoute.Settings)
+    }
+    
+    // Bottom bar is shown on the main home tabs
+    val showBottomBar = bottomTabs.contains(currentRoute)
 
     // Wire the global 401 interceptor: clear session and redirect to Welcome
     LaunchedEffect(navController) {
@@ -71,118 +79,40 @@ fun EchoWithinApp() {
                     containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 8.dp
                 ) {
-                    NavigationBarItem(
-                        selected = currentRoute == AppRoute.Home,
-                        onClick = {
-                            if (currentRoute != AppRoute.Home) {
-                                navController.navigate(AppRoute.Home) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+                    bottomTabs.forEach { route ->
+                        val (icon, label, selected) = when (route) {
+                            AppRoute.Home -> Triple(Icons.Default.Home, "Home", currentRoute == AppRoute.Home)
+                            AppRoute.Search -> Triple(Icons.Default.Search, "Search", currentRoute == AppRoute.Search)
+                            AppRoute.Premium -> Triple(Icons.Default.Star, "Premium", currentRoute == AppRoute.Premium)
+                            AppRoute.Settings -> Triple(Icons.Default.Settings, "Settings", currentRoute == AppRoute.Settings)
+                            else -> throw IllegalArgumentException("Unknown route: $route")
+                        }
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                if (!selected) {
+                                    navController.navigate(route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Home,
-                                contentDescription = "Home"
+                            },
+                            icon = {
+                                Icon(imageVector = icon, contentDescription = label)
+                            },
+                            label = { Text(label) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = BrandOrange,
+                                selectedTextColor = BrandOrange,
+                                indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
+                                unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                        },
-                        label = { Text("Home") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandOrange,
-                            selectedTextColor = BrandOrange,
-                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                    )
-                    NavigationBarItem(
-                        selected = currentRoute == AppRoute.Search,
-                        onClick = {
-                            if (currentRoute != AppRoute.Search) {
-                                navController.navigate(AppRoute.Search) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search"
-                            )
-                        },
-                        label = { Text("Search") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandOrange,
-                            selectedTextColor = BrandOrange,
-                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = currentRoute == AppRoute.Premium,
-                        onClick = {
-                            if (currentRoute != AppRoute.Premium) {
-                                navController.navigate(AppRoute.Premium) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Star,
-                                contentDescription = "Premium"
-                            )
-                        },
-                        label = { Text("Premium") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandOrange,
-                            selectedTextColor = BrandOrange,
-                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
-                    NavigationBarItem(
-                        selected = currentRoute == AppRoute.Settings,
-                        onClick = {
-                            if (currentRoute != AppRoute.Settings) {
-                                navController.navigate(AppRoute.Settings) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = "Settings"
-                            )
-                        },
-                        label = { Text("Settings") },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = BrandOrange,
-                            selectedTextColor = BrandOrange,
-                            indicatorColor = MaterialTheme.colorScheme.surfaceVariant,
-                            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    )
+                    }
                 }
             }
         }

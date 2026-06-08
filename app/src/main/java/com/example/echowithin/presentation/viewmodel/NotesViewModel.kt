@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 
 
 @Immutable
@@ -190,6 +191,30 @@ class NotesViewModel(
                 repository.clearLocalData()
             }
             uiState = NotesUiState(isLoading = false)
+            isInitialDataLoaded = false
+        }
+    }
+
+    /**
+     * Clears only server-synced notes, preserving offline-only notes.
+     * Used on session expiry/401 so the user doesn't lose their private
+     * local notes when the session dies.
+     */
+    fun clearOfflineData() {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                repository.clearOfflineData()
+            }
+            // Reload to show only the preserved offline notes
+            val (localNotes, pending) = withContext(Dispatchers.IO) {
+                repository.getLocalNotes() to pendingSyncCount()
+            }
+            uiState = uiState.copy(
+                notes = localNotes,
+                isLoading = localNotes.isEmpty(),
+                pendingSyncCount = pending,
+                error = null
+            )
             isInitialDataLoaded = false
         }
     }
@@ -608,6 +633,28 @@ class NotesViewModel(
                         error = it.message ?: "Search failed"
                     )
                 }
+        }
+    }
+
+    /**
+     * Checks if there are any offline-only notes (created before login).
+     */
+    fun hasOfflineNotes(): Boolean = runBlocking {
+        repository.getOfflineNotesCount() > 0
+    }
+
+    /**
+     * Backs up offline-only notes to the server by marking them for sync.
+     * Changes pendingOp from "none" to "create" so the next sync pushes them.
+     */
+    fun backupOfflineNotes(onComplete: (Int) -> Unit) {
+        viewModelScope.launch {
+            val backedUp = repository.markOfflineNotesForBackup()
+            if (backedUp > 0) {
+                ephemeralMessage = "Preparing $backedUp offline note${if (backedUp > 1) "s" else ""} for backup..."
+                syncNotes()
+            }
+            onComplete(backedUp)
         }
     }
 
