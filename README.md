@@ -5,16 +5,26 @@ It is just the echowithin personal space but note focused, stripping away blog f
 Jetpack Compose Android client for EchoWithin APIs.
 
 ## Current Functional Slice
-- Cookie/session login (`POST /api/login`)
-- Notes list (`GET /api/notes`)
-- Create note (`POST /api/notes/create`)
-- Search over loaded notes
-- Note detail + editor flow
-- Logout (`POST /api/logout`)
+- Cookie/session login (`POST /api/v1/login`)
+- Session re-authentication (`POST /api/v1/app_reauth`) with persistent httpOnly cookies
+- Notes list (`GET /api/v1/notes`), create, edit, delete, search
+- Note detail with full Markdown rendering (custom parser + KaTeX for math)
+- Offline-first: local SQLite database, bidirectional sync, smart sync dispatcher
+- Note locking (premium), version history, collaboration proposals
+- Note sharing with permissions, expiry, surprise themes, auto-approve
+- Shared Links tab, Activity tab with notifications and proposals
+- App Lock: 4-digit PIN with shake animation on wrong entry
+- Offline mode: create notes without an account, backup prompt on first login
+- FCM push notifications
+- In-app OTA update (checks `update-manifest.json`)
+- Premium tier display with upgrade deep link
+- Guest/Offline mode: full local note-taking without sign-in
+- Sync mode preference (Automatic / Manual)
 
 ## Project Layout
 - `app/src/main/java/com/example/echowithin/presentation/*` - screens, nav, app shell, viewmodels
 - `app/src/main/java/com/example/echowithin/data/*` - API service, DTOs, repositories, client
+- `app/src/main/java/com/example/echowithin/domain/*` - models, use cases
 - `api.py` - backend route reference used for Android client integration
 
 ## Configure Java (Windows PowerShell)
