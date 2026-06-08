@@ -78,8 +78,11 @@ class NotesViewModel(
 
     /** Timestamp of last automatic sync to enforce periodic-only behaviour. */
     private var lastAutoSyncAt = 0L
-    /** Minimum interval between automatic syncs (30 minutes). */
-    private val autoSyncIntervalMs = 30 * 60 * 1000L
+    /** Minimum interval between automatic syncs (5 minutes). */
+    private val autoSyncIntervalMs = 5 * 60 * 1000L
+    /** Set to true after the first real connectivity change so we skip the
+     *  initial composition trigger and avoid firing a sync on app launch. */
+    private var connectivityInitialized = false
 
     /** Toasts/errors that survive recomposition but are shown exactly once. */
     var ephemeralMessage by mutableStateOf<String?>(null)
@@ -182,6 +185,12 @@ class NotesViewModel(
      */
     fun onConnectivityChanged(isOnline: Boolean) {
         if (!isOnline) return
+        // Skip the very first call (initial composition) so we don't fire
+        // a sync the moment the Home screen appears.
+        if (!connectivityInitialized) {
+            connectivityInitialized = true
+            return
+        }
         val isAutomatic = com.example.echowithin.data.network.SessionManager.syncMode == "automatic"
         viewModelScope.launch {
             val pending = pendingSyncCount()

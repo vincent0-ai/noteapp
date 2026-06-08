@@ -55,7 +55,7 @@ fun AppNavGraph(
     val context = androidx.compose.ui.platform.LocalContext.current
 
     // Dynamic start destination based on whether user has an active session token
-    val startDest = if (SessionManager.token != null) AppRoute.Home else AppRoute.Welcome
+    val startDest = if (SessionManager.token != null && SessionManager.token != "null") AppRoute.Home else AppRoute.Welcome
 
     // Shared ViewModels for Home tab usage
     val appLockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory())
@@ -70,11 +70,12 @@ fun AppNavGraph(
         }
     }
 
-    // Validate session then load data on launch
+            // Validate session then load data on launch
             LaunchedEffect(Unit) {
                 if (notesViewModel.isInitialDataLoaded) return@LaunchedEffect
                 notesViewModel.checkForUpdates(context)
-                if (SessionManager.token != null) {
+                val hasToken = SessionManager.token != null && SessionManager.token != "null" && !SessionManager.token.isNullOrBlank()
+                if (hasToken) {
                     try {
                         // Call appReauth to verify session/token on server
                         withContext(Dispatchers.IO) {
