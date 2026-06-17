@@ -57,13 +57,16 @@ class AppLockRepository {
                 Result.failure(IllegalStateException(response.error ?: "Incorrect PIN"))
             }
         } catch (e: java.io.IOException) {
-            // Offline fallback: verify against locally stored PIN hash
+            // Offline fallback: verify against locally stored PIN hash.
+            // The hash is persisted by setupLock() / an online verify() and
+            // is intentionally preserved across logout (SessionManager.clearSession
+            // keeps it) so the correct PIN still unlocks offline after sign-out.
             if (SessionManager.localPinConfigured && SessionManager.localPinHash == hash) {
                 Result.success(Unit)
             } else if (SessionManager.localPinConfigured && SessionManager.localPinHash != null) {
                 Result.failure(IllegalStateException("Incorrect PIN (offline mode)"))
             } else {
-                Result.failure(IllegalStateException("Cannot verify PIN while offline. No locally stored PIN found."))
+                Result.failure(IllegalStateException("Can't verify PIN offline. Reconnect to the internet to unlock."))
             }
         } catch (e: retrofit2.HttpException) {
             val errorBody = e.response()?.errorBody()?.string()

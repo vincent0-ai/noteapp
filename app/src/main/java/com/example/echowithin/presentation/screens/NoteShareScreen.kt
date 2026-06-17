@@ -165,7 +165,7 @@ fun NoteShareScreen(
                     )
                 }
             } else {
-                items(uiState.shares) { share ->
+                    items(uiState.shares, key = { it.share_id }) { share ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
@@ -318,7 +318,7 @@ fun NoteShareScreen(
                     )
                 }
 
-                items(uiState.attachments) { attachment ->
+                items(uiState.attachments, key = { it.id }) { attachment ->
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),

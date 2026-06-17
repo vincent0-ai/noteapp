@@ -118,7 +118,7 @@ fun NoteVersionsScreen(
                         )
                     }
                 } else {
-                    items(uiState.versions) { version ->
+                    items(uiState.versions, key = { it.version_id }) { version ->
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),

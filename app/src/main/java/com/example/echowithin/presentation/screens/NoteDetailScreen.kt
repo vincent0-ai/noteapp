@@ -53,6 +53,70 @@ private val linkRegex = Regex("\\[([^]]+)]\\(([^)]+)\\)")
 private val italicAsteriskRegex = Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)")
 private val italicUnderscoreRegex = Regex("(?<=\\s|^)_(?!_)(.+?)(?<!_)_(?=\\s|$|[.,;:!?])")
 
+/**
+ * Escapes note content so it is safe to interpolate into a JS template
+ * literal: `renderContent(`$escaped`, $isDark)`. Backslashes, backticks and
+ * `package com.example.echowithin.presentation.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
+import com.example.echowithin.data.model.AppNote
+import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
+import com.example.echowithin.ui.theme.ErrorRed
+import androidx.compose.material.icons.filled.Sync
+
+// Pre-compiled regex patterns for markdown rendering
+private val headingRegex = Regex("^(#+)\\s+(.*)$")
+private val blockquoteRegex = Regex("^\\s*>\\s*")
+private val unorderedListRegex = Regex("^\\s*[-*]\\s+(.*)")
+private val orderedListRegex = Regex("^\\s*(\\d+)\\.\\s+(.*)")
+private val horizontalRuleRegex = Regex("^\\s*(---+|\\*\\*\\*+)\\s*$")
+private val codeBlockFenceRegex = Regex("^```")
+private val boldDoubleAsteriskRegex = Regex("\\*\\*(.+?)\\*\\*")
+private val boldDoubleUnderscoreRegex = Regex("__(.+?)__")
+private val strikethroughRegex = Regex("~~(.+?)~~")
+private val inlineCodeRegex = Regex("`([^`]+)`")
+private val linkRegex = Regex("\\[([^]]+)]\\(([^)]+)\\)")
+ are the three characters that would otherwise break out of the
+ * template literal. Kept as a top-level helper so the WebView `factory`
+ * and `update` paths share one implementation.
+ */
+private fun escapeJsTemplateLiteral(text: String): String = text
+    .replace("\\", "\\\\")
+    .replace("`", "\\`")
+    .replace("$", "\\$")
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -417,6 +481,16 @@ fun NoteDetailScreen(
                     ) {
                         if (containsMath) {
                             val isDark = isSystemInDarkTheme()
+                            // Tracks what we last injected into the WebView so
+                            // the `update` block only re-runs the JS render
+                            // when the content or theme ACTUALLY changed.
+                            // Without this, every recomposition (an isSyncing
+                            // flip, a lock toggle, a sticky-bar redraw)
+                            // re-allocated a WebViewClient and re-ran
+                            // evaluateJavascript(), forcing KaTeX to re-render
+                            // -> layout pass -> outer Compose re-measure ->
+                            // scroll hitch on the detail screen.
+                            val injected = remember { mutableStateOf("" to false) }
                             androidx.compose.ui.viewinterop.AndroidView(
                                 factory = { ctx ->
                                     android.webkit.WebView(ctx).apply {
@@ -432,27 +506,30 @@ fun NoteDetailScreen(
                                             isHorizontalScrollBarEnabled = false
                                             overScrollMode = android.view.View.OVER_SCROLL_NEVER
                                         }
-                                        webViewClient = android.webkit.WebViewClient()
+                                        // Assign the client ONCE in factory.
+                                        // onPageFinished renders the content
+                                        // the first time the KaTeX page loads;
+                                        // subsequent content/theme changes are
+                                        // pushed by the `update` block below.
+                                        webViewClient = object : android.webkit.WebViewClient() {
+                                            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                                val (text, dark) = injected.value
+                                                if (text.isNotEmpty()) {
+                                                    val escaped = escapeJsTemplateLiteral(text)
+                                                    view?.evaluateJavascript("renderContent(`$escaped`, $dark)", null)
+                                                }
+                                            }
+                                        }
                                         loadUrl("file:///android_asset/katex/math_renderer.html")
                                     }
                                 },
                                 update = { webView ->
-                                    // Inject rawText and theme into the page once it's loaded.
-                                    webView.webViewClient = object : android.webkit.WebViewClient() {
-                                        override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
-                                            val escapedText = contentText
-                                                .replace("\\", "\\\\")
-                                                .replace("`", "\\`")
-                                                .replace("$", "\\$")
-                                            webView.evaluateJavascript("renderContent(`$escapedText`, $isDark)", null)
-                                        }
+                                    val last = injected.value
+                                    if (last.first != contentText || last.second != isDark) {
+                                        injected.value = contentText to isDark
+                                        val escaped = escapeJsTemplateLiteral(contentText)
+                                        webView.evaluateJavascript("renderContent(`$escaped`, $isDark)", null)
                                     }
-                                    // If already loaded, trigger immediately
-                                    val escapedText = contentText
-                                        .replace("\\", "\\\\")
-                                        .replace("`", "\\`")
-                                        .replace("$", "\\$")
-                                    webView.evaluateJavascript("renderContent(`$escapedText`, $isDark)", null)
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()

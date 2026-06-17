@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.runBlocking
 
 
 @Immutable
@@ -89,10 +88,20 @@ class NotesViewModel(
         private set
     fun consumeEphemeralMessage() { ephemeralMessage = null }
 
+    /**
+     * One long-lived [NoteDatabaseHelper] for the pending-count reads. The
+     * repository keeps its own; this one is used by [pendingSyncCount],
+     * which previously constructed a brand-new SQLiteOpenHelper on every
+     * call (and it's called on every loadNotes() / onConnectivityChanged()).
+     * Lazily initialised so we don't touch SQLite before the VM is used.
+     */
+    private val pendingDbHelper: NoteDatabaseHelper by lazy {
+        NoteDatabaseHelper(EchoWithinApplication.instance)
+    }
+
     private suspend fun pendingSyncCount(): Int = withContext(Dispatchers.IO) {
         try {
-            val helper = NoteDatabaseHelper(EchoWithinApplication.instance)
-            helper.getPendingNotes().size
+            pendingDbHelper.getPendingNotes().size
         } catch (_: Exception) { 0 }
     }
 
@@ -141,8 +150,32 @@ class NotesViewModel(
         uiState = uiState.copy(updateInfo = null, downloadProgress = null)
     }
 
-    fun syncNotes() {
+    /**
+     * Minimum gap between *automatic* syncs so we don't hammer the server.
+     * User-initiated syncs ([force] = true, e.g. the Sync button or the
+     * "Back up offline notes" action) always bypass this window.
+     */
+    private val autoSyncCooldownMs = 5 * 60 * 1000L
+    private var lastSyncStartedAt = 0L
+
+    /**
+     * Push pending local changes and pull fresh notes from the server.
+     *
+     * Idempotency:
+     *  - [isSyncing] guard prevents overlapping syncs.
+     *  - [force] = false (automatic / reconnect) is further debounced by
+     *    [autoSyncCooldownMs] so a flurry of triggers (each navigation, each
+     *    connectivity blip) collapses into at most one sync per 5 minutes.
+     *  - [force] = true (user tapped Sync, or "Back up offline notes")
+     *    always runs immediately.
+     */
+    fun syncNotes(force: Boolean = false) {
         if (uiState.isSyncing) return
+        if (!force) {
+            val now = System.currentTimeMillis()
+            if (now - lastSyncStartedAt < autoSyncCooldownMs) return
+        }
+        lastSyncStartedAt = System.currentTimeMillis()
         uiState = uiState.copy(isSyncing = true, error = null)
         viewModelScope.launch {
             repository.syncNotes()
@@ -151,17 +184,21 @@ class NotesViewModel(
                         isSyncing = false,
                         lastSyncedAt = System.currentTimeMillis()
                     )
-                    loadNotes(silent = true)
-                    ephemeralMessage = "Synced with the server"
                     // One-shot dedup of any duplicates that piled up before
                     // the v1.7.1 sync-flag fix. Server endpoint is a no-op
                     // when there are no duplicates, so it's safe to call
                     // every sync — but we only surface a toast when it
                     // actually cleaned something up.
                     val removed = repository.dedupNotesOnServer()
-                    if (removed > 0) {
-                        loadNotes(silent = true)
-                        ephemeralMessage = "Cleaned up $removed duplicate note${if (removed == 1) "" else "s"} from a previous sync"
+                    // Reload once after sync (and the dedup). Previously this
+                    // called loadNotes(silent) twice — once unconditionally
+                    // and again when dedup removed > 0 — which doubled the
+                    // server round-trips and the uiState emits on every sync.
+                    loadNotes(silent = true)
+                    ephemeralMessage = if (removed > 0) {
+                        "Cleaned up $removed duplicate note${if (removed == 1) "" else "s"} from a previous sync"
+                    } else {
+                        "Synced with the server"
                     }
                 }
                 .onFailure { t ->
@@ -230,21 +267,39 @@ class NotesViewModel(
      */
     fun clearOfflineData() {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                repository.clearOfflineData()
-            }
-            // Reload to show only the preserved offline notes
-            val (localNotes, pending) = withContext(Dispatchers.IO) {
-                repository.getLocalNotes() to pendingSyncCount()
-            }
-            uiState = uiState.copy(
-                notes = localNotes,
-                isLoading = localNotes.isEmpty(),
-                pendingSyncCount = pending,
-                error = null
-            )
-            isInitialDataLoaded = false
+            clearAccountData()
         }
+    }
+
+    /**
+     * Suspend variant used by the logout flow so the DB wipe COMPLETES
+     * before navigation kicks the user to the Login screen. Deletes every
+     * account-synced note (real server IDs + any pending create/edit/delete
+     * ops) while preserving genuine offline-only notes (local_* IDs with
+     * pending_op='none'), which the user can later back up to the server
+     * after signing back in. Also refreshes the in-memory note list so the
+     * next screen render shows only the surviving offline notes — not the
+     * account's content (the "logged out but still seeing my account
+     * content" leak).
+     */
+    suspend fun clearAccountData() {
+        withContext(Dispatchers.IO) {
+            repository.clearOfflineData()
+        }
+        val (localNotes, pending) = withContext(Dispatchers.IO) {
+            repository.getLocalNotes() to pendingSyncCount()
+        }
+        uiState = uiState.copy(
+            notes = localNotes,
+            isLoading = localNotes.isEmpty(),
+            pendingSyncCount = pending,
+            error = null,
+            activeShares = emptyList(),
+            proposals = emptyList(),
+            notifications = emptyList(),
+            unreadNotificationsCount = 0
+        )
+        isInitialDataLoaded = false
     }
 
     fun wipeAllData() {
@@ -665,13 +720,6 @@ class NotesViewModel(
     }
 
     /**
-     * Checks if there are any offline-only notes (created before login).
-     */
-    fun hasOfflineNotes(): Boolean = runBlocking {
-        repository.getOfflineNotesCount() > 0
-    }
-
-    /**
      * Returns the count of offline-only notes (created before login).
      * Safe to call from withContext(Dispatchers.IO).
      */
@@ -688,7 +736,7 @@ class NotesViewModel(
             val backedUp = repository.markOfflineNotesForBackup()
             if (backedUp > 0) {
                 ephemeralMessage = "Preparing $backedUp offline note${if (backedUp > 1) "s" else ""} for backup..."
-                syncNotes()
+                syncNotes(force = true)
             }
             onComplete(backedUp)
         }

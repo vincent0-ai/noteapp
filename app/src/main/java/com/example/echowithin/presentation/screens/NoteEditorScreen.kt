@@ -468,8 +468,13 @@ private fun PreviewTab(content: String) {
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                 )
             } else {
+                // Memoize the markdown render on `content` so it's only
+                // recomputed when the text actually changes, not on every
+                // recomposition of the Preview tab (e.g. focus / config
+                // changes that don't touch the content).
+                val rendered = remember(content) { renderMarkdownEditor(content) }
                 Text(
-                    text = renderMarkdownEditor(content),
+                    text = rendered,
                     modifier = Modifier.padding(20.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface

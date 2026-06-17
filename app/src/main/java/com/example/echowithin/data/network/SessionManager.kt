@@ -102,5 +102,42 @@ object SessionManager {
             ApiClient.clearCookies()
         } catch (_: Exception) {}
     }
+
+    /**
+     * Clears SESSION-level data (token, username, account tier, trial state)
+     * while preserving DEVICE-LOCAL data: the app-lock PIN hash/flags,
+     * sync-mode preference, dismissed-update code, and the offline-privacy
+     * "shown once" flag.
+     *
+     * Use this on logout / 401 session expiry instead of [clear]. The PIN
+     * hash is a device-local security secret — it must survive logout so
+     * the user can still unlock locked notes while offline after signing
+     * out. Wiping it (the old behaviour) made the correct PIN silently
+     * fail offline, because the offline verify path has no hash to
+     * compare against. Sync-mode and the dismissed-update / privacy flags
+     * are user preferences that should also persist across sign-out.
+     *
+     * [clear] (full wipe) remains for true account deletion / factory reset.
+     */
+    fun clearSession() {
+        val savedPinHash = localPinHash
+        val savedHasPin = localHasPin
+        val savedPinConfigured = localPinConfigured
+        val savedSyncMode = syncMode
+        val savedDismissedUpdate = dismissedUpdateCode
+        val savedOfflinePrivacyShown = offlinePrivacyShown
+        prefs?.edit()?.clear()?.apply()
+        prefs?.edit()?.apply {
+            putString(KEY_LOCAL_PIN_HASH, savedPinHash)
+            putBoolean(KEY_LOCAL_HAS_PIN, savedHasPin)
+            putBoolean(KEY_LOCAL_PIN_CONFIGURED, savedPinConfigured)
+            putString(KEY_SYNC_MODE, savedSyncMode)
+            putInt(KEY_DISMISSED_UPDATE_CODE, savedDismissedUpdate)
+            putBoolean(KEY_OFFLINE_PRIVACY_SHOWN, savedOfflinePrivacyShown)
+        }
+        try {
+            ApiClient.clearCookies()
+        } catch (_: Exception) {}
+    }
 }
 

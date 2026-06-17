@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.sp
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.components.EchoWithinLogoBadge
 import com.example.echowithin.ui.theme.BrandOrange
-import com.example.echowithin.ui.theme.BrandAmber
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 
@@ -55,12 +54,10 @@ fun WelcomeScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                // Decorative logo badge
                 EchoWithinLogoBadge(size = 120.dp)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Large title
                 Text(
                     text = "Echo Within",
                     style = MaterialTheme.typography.displaySmall,
@@ -69,39 +66,6 @@ fun WelcomeScreen(
                     letterSpacing = 1.sp,
                     textAlign = TextAlign.Center
                 )
-
-                // Decorative tagline
-                Surface(
-                    shape = RoundedCornerShape(20.dp),
-                    color = BrandAmber.copy(alpha = 0.1f),
-                    border = BorderStroke(1.dp, BrandAmber.copy(alpha = 0.3f))
-                ) {
-                    Text(
-                        text = "✦ Unspoken but real ✦",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        color = BrandAmber,
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Affiliate text
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                ) {
-                    Text(
-                        text = "This app is affiliated with the EchoWithin platform. For full functionality and experience, visit echowithin.xyz",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(20.dp)
-                    )
-                }
             }
 
             // Bottom section with Get Started & Continue Offline buttons
@@ -157,9 +121,9 @@ fun WelcomeScreen(
                 }
 
                 Text(
-                    text = "✦ Your notes. Your device. Your rules. ✦",
+                    text = "Sign in to sync across devices, or continue offline.",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(top = 8.dp)
                 )

@@ -58,12 +58,18 @@ fun EchoWithinApp() {
     // Bottom bar is shown on the main home tabs
     val showBottomBar = bottomTabs.contains(currentRoute)
 
-    // Wire the global 401 interceptor: clear session and redirect to Welcome
+    // Wire the global 401 interceptor: clear session and redirect to Welcome.
+    // Uses clearSession() (preserves the device-local PIN hash + sync-mode +
+    // dismissed-update flags) and clearOfflineData() (preserves genuine
+    // offline-only notes) so a session death behaves like a sign-out: the
+    // account token is gone and account-synced content is removed, but the
+    // user can still unlock notes offline with their PIN and recover their
+    // offline notes on re-login.
     LaunchedEffect(navController) {
         ApiClient.onUnauthorized = {
             android.os.Handler(android.os.Looper.getMainLooper()).post {
-                SessionManager.clear()
-                notesViewModel.clearLocalData()
+                SessionManager.clearSession()
+                notesViewModel.clearOfflineData()
                 navController.navigate(AppRoute.Welcome) {
                     popUpTo(0) { inclusive = true }
                 }

@@ -106,7 +106,11 @@ class AuthViewModel(
             try {
                 repository.logout()
             } catch (_: Exception) {}
-            SessionManager.clear()
+            // clearSession() — NOT clear(): preserves the device-local PIN
+            // hash/flags (so the correct PIN still unlocks offline after
+            // sign-out), sync-mode preference, and the dismissed-update /
+            // offline-privacy flags. Only account/session data is wiped.
+            SessionManager.clearSession()
             onSuccess()
         }
     }

@@ -39,6 +39,7 @@ import com.example.echowithin.presentation.viewmodel.NoteShareViewModel
 import com.example.echowithin.presentation.viewmodel.NoteVersionsViewModel
 import com.example.echowithin.presentation.viewmodel.NotesViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.os.Build
 import android.util.Log
@@ -60,6 +61,45 @@ fun AppNavGraph(
     // Shared ViewModels for Home tab usage
     val appLockViewModel: AppLockViewModel = viewModel(factory = AppLockViewModel.factory())
 
+    // Connectivity is observed ONCE at the graph level (not inside the Home
+    // destination). Previously these effects lived inside
+    // composable(AppRoute.Home){}, so every navigation Home -> Detail -> Home
+    // tore them down and re-fired them, re-arming the sync trigger and
+    // re-calling onConnectivityChanged() — which then kicked syncNotes() over
+    // and over (the "frequent server syncing between page navigation" bug).
+    // Hoisting them to the graph scope means they live for the whole session
+    // and never re-run on navigation. The resulting `isOnline` value is also
+    // handed to HomeScreen via its existing parameter.
+    val isOnlineState = remember { NetworkMonitor.isOnline }.collectAsState()
+    val isOnline = isOnlineState.value
+    LaunchedEffect(isOnline) {
+        notesViewModel.onConnectivityChanged(isOnline)
+    }
+    val syncTriggerState = notesViewModel.syncTrigger.collectAsState()
+    val syncTrigger = syncTriggerState.value
+    // Gated on syncMode == "automatic" as defense in depth — the view-model
+    // also gates onConnectivityChanged() the same way, but if anything else
+    // ever pings the trigger we still respect the user's manual-sync
+    // preference. This effect now runs at graph scope, so it fires once per
+    // trigger change rather than once per Home re-entry.
+    LaunchedEffect(syncTrigger) {
+        if (syncTrigger > 0L && isOnline &&
+            SessionManager.syncMode == "automatic"
+        ) {
+            notesViewModel.syncNotes()
+        }
+    }
+    // Ephemeral toasts (mark-all-read cleared, sync done, etc.). Hoisted to
+    // graph scope so a toast queued while on Detail/Editor still fires when
+    // the user returns to Home, without needing Home to be on screen.
+    val ephemeral = notesViewModel.ephemeralMessage
+    LaunchedEffect(ephemeral) {
+        if (!ephemeral.isNullOrBlank()) {
+            android.widget.Toast.makeText(context, ephemeral, android.widget.Toast.LENGTH_SHORT).show()
+            notesViewModel.consumeEphemeralMessage()
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -70,12 +110,24 @@ fun AppNavGraph(
         }
     }
 
-            // Validate session then load data on launch
+            // Validate session then load data on launch.
+            //
+            // IMPORTANT: in offline mode (no token — the user tapped
+            // "Continue Offline") we must NOT make any network call here.
+            // Previously checkForUpdates() ran unconditionally: it hit the
+            // server with no token → 401 → the global 401 interceptor
+            // cleared the session and navigated back to Welcome, producing
+            // the "I keep being returned to the welcome screen" loop and
+            // the "why is it syncing on startup" complaint. Now every
+            // network call (update check, appReauth, profile) is gated on
+            // hasToken, and the offline branch only reads the local DB +
+            // restores the local PIN state so locked notes can unlock.
             LaunchedEffect(Unit) {
                 if (notesViewModel.isInitialDataLoaded) return@LaunchedEffect
-                notesViewModel.checkForUpdates(context)
                 val hasToken = SessionManager.token != null && SessionManager.token != "null" && !SessionManager.token.isNullOrBlank()
                 if (hasToken) {
+                    // Online: check for app updates (network), then verify session.
+                    notesViewModel.checkForUpdates(context)
                     try {
                         // Call appReauth to verify session/token on server
                         withContext(Dispatchers.IO) {
@@ -109,21 +161,29 @@ fun AppNavGraph(
                         notesViewModel.loadAllData()
                         appLockViewModel.refreshStatus()
                     } catch (e: retrofit2.HttpException) {
-                        // ANY HTTP error from appReauth means the session is suspect.
-                        // Treat it as invalid/expired — redirect to Welcome.
-                        // This prevents logout loops from 5xx, 429, 400, etc.
-                        SessionManager.clear()
+                        // A token was present but the server rejected it
+                        // (appReauth failed) — treat as session-expired and
+                        // fall back to offline-only. Use clearSession() so
+                        // the device-local PIN hash survives (otherwise the
+                        // correct PIN can't unlock offline afterwards).
+                        SessionManager.clearSession()
                         notesViewModel.clearOfflineData() // Preserves offline-only notes
+                        notesViewModel.loadNotes()
+                        appLockViewModel.refreshStatus()
                         navController.navigate(AppRoute.Welcome) {
                             popUpTo(0) { inclusive = true }
                         }
                     } catch (_: Exception) {
                         // Network error — load from local DB only, keep token for retry
                         notesViewModel.loadNotes()
+                        appLockViewModel.refreshStatus()
                     }
                 } else {
-                    // No token — load whatever is in local DB
+                    // Offline mode: no token, so NO network calls. Just
+                    // hydrate from the local DB and restore the local PIN
+                    // state so locked notes can be unlocked offline.
                     notesViewModel.loadNotes()
+                    appLockViewModel.refreshStatus()
                 }
             }
 
@@ -198,39 +258,11 @@ fun AppNavGraph(
         }
 
         composable(AppRoute.Home) {
-            // Listen for connectivity changes and auto-sync when we come
-            // back online. We collect the StateFlow here (in the composable
-            // scope) so the LaunchedEffect re-fires only when the value
-            // actually changes — not on every recomposition.
-            val isOnlineState = remember { NetworkMonitor.isOnline }.collectAsState()
-            val isOnline = isOnlineState.value
-            LaunchedEffect(isOnline) {
-                notesViewModel.onConnectivityChanged(isOnline)
-            }
-            // Auto-sync when the view-model pings the trigger (debounced
-            // reconnect logic). Pull the value into a local so
-            // collectAsState() subscribes us to updates.
-            // Gated on syncMode == "automatic" as defense in depth — the
-            // view-model also gates onConnectivityChanged() the same way,
-            // but if anything else ever pings the trigger we still respect
-            // the user's manual-sync preference.
-            val syncTriggerState = notesViewModel.syncTrigger.collectAsState()
-            val syncTrigger = syncTriggerState.value
-            LaunchedEffect(syncTrigger) {
-                if (syncTrigger > 0L && isOnline &&
-                    com.example.echowithin.data.network.SessionManager.syncMode == "automatic"
-                ) {
-                    notesViewModel.syncNotes()
-                }
-            }
-            // Ephemeral toasts (mark-all-read cleared, sync done, etc.)
-            val ephemeral = notesViewModel.ephemeralMessage
-            LaunchedEffect(ephemeral) {
-                if (!ephemeral.isNullOrBlank()) {
-                    android.widget.Toast.makeText(context, ephemeral, android.widget.Toast.LENGTH_SHORT).show()
-                    notesViewModel.consumeEphemeralMessage()
-                }
-            }
+            // Connectivity observation, the sync-trigger effect, and the
+            // ephemeral-toast effect all live at the AppNavGraph scope now
+            // (see top of this composable) so that navigating away from Home
+            // and back does NOT re-fire them. `isOnline` is handed down via
+            // the existing HomeScreen parameter.
             val isOfflineMode = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
 
             // Offline notes count for backup prompt
@@ -262,7 +294,7 @@ fun AppNavGraph(
                     if (isOfflineMode) {
                         android.widget.Toast.makeText(context, "Sign in or create an account to sync notes!", android.widget.Toast.LENGTH_SHORT).show()
                     } else {
-                        notesViewModel.syncNotes()
+                        notesViewModel.syncNotes(force = true)
                     }
                 },
                 onRetryClick = { notesViewModel.loadNotes() },
@@ -484,12 +516,23 @@ fun AppNavGraph(
         }
 
         composable(AppRoute.Settings) {
+            // A scope so the logout flow can AWAIT the account-data wipe
+            // before navigating. Without this the wipe (async) raced the
+            // navigation and the Login screen could briefly show the
+            // account's notes before they were deleted.
+            val settingsScope = androidx.compose.runtime.rememberCoroutineScope()
             SettingsScreen(
                 onLogout = {
                     authViewModel.logout {
-                        notesViewModel.clearLocalData()
-                        navController.navigate(AppRoute.Login) {
-                            popUpTo(AppRoute.Home) { inclusive = true }
+                        // Runs on AuthViewModel's viewModelScope coroutine.
+                        // Hop onto the Settings screen's scope so we can
+                        // await the (suspend) account-data clear, then
+                        // navigate once the DB is actually clean.
+                        settingsScope.launch {
+                            notesViewModel.clearAccountData()
+                            navController.navigate(AppRoute.Login) {
+                                popUpTo(0) { inclusive = true }
+                            }
                         }
                     }
                 },

@@ -114,9 +114,21 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    items(visiblePairs) { (hit, note) ->
+                    // Stable key on the hit id so LazyColumn can preserve
+                    // item identity across result updates (typing a new
+                    // query, a locked note being hidden, etc.). Without a
+                    // key, every result-list mutation tears down and
+                    // recomposes every visible card and can jump scroll.
+                    items(visiblePairs, key = { (hit, _) -> hit.id }) { (hit, note) ->
                         val isNoteLocked = note?.isLocked == true
                         val hideContent = isNoteLocked && isLocked
+
+                        // Memoize the markdown-stripped + highlight-parsed
+                        // snippet per item so it's computed once per result,
+                        // not on every scroll frame / recomposition.
+                        val highlightedSnippet = remember(hit.snippet) {
+                            parseSearchSnippet(hit.snippet.orEmpty(), BrandOrange)
+                        }
 
                         Card(
                             onClick = { onNoteClick(hit.id) },
@@ -155,7 +167,7 @@ fun SearchScreen(
                                     )
                                 } else {
                                     Text(
-                                        text = parseSearchSnippet(hit.snippet.orEmpty(), BrandOrange),
+                                        text = highlightedSnippet,
                                         style = MaterialTheme.typography.bodyLarge,
                                         color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 3,
@@ -240,14 +252,28 @@ fun parseSearchSnippet(snippet: String, highlightColor: Color): AnnotatedString 
     }
 }
 
+// Pre-compiled markdown-stripping regexes. Previously stripMarkdown()
+// allocated 7 fresh Regex objects per call per visible card, which ran on
+// every recomposition (every scroll frame / every keystroke) and caused
+// noticeable GC pressure and frame drops on long search lists. Compiling
+// them once at file scope (matching the pattern HomeScreen uses) removes
+// that per-frame cost entirely.
+private val searchMdHeadingRegex = Regex("(?m)^#+\\s+")
+private val searchMdBlockquoteRegex = Regex("(?m)^[\\s*+-]*>\\s*")
+private val searchMdListItemRegex = Regex("(?m)^[\\s]*[*+-]\\s+")
+private val searchMdEmphasisRegex = Regex("\\*\\*|__|\\*|_|~~")
+private val searchMdInlineCodeRegex = Regex("`+")
+private val searchMdLinkRegex = Regex("\\[(.*?)\\]\\(.*?\\)")
+private val searchMdImageRegex = Regex("!\\[(.*?)\\]\\(.*?\\)")
+
 private fun stripMarkdown(text: String): String {
     var clean = text
-    clean = clean.replace(Regex("(?m)^#+\\s+"), "")
-    clean = clean.replace(Regex("(?m)^[\\s*+-]*>\\s*"), "")
-    clean = clean.replace(Regex("(?m)^[\\s]*[*+-]\\s+"), "")
-    clean = clean.replace(Regex("\\*\\*|__|\\*|_|~~"), "")
-    clean = clean.replace(Regex("`+"), "")
-    clean = clean.replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
-    clean = clean.replace(Regex("!\\[(.*?)\\]\\(.*?\\)"), "$1")
+    clean = clean.replace(searchMdHeadingRegex, "")
+    clean = clean.replace(searchMdBlockquoteRegex, "")
+    clean = clean.replace(searchMdListItemRegex, "")
+    clean = clean.replace(searchMdEmphasisRegex, "")
+    clean = clean.replace(searchMdInlineCodeRegex, "")
+    clean = clean.replace(searchMdLinkRegex, "$1")
+    clean = clean.replace(searchMdImageRegex, "$1")
     return clean
 }
