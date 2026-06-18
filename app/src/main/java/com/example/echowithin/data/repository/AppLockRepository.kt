@@ -80,6 +80,16 @@ class AppLockRepository {
     }
 
     suspend fun checkStatus(): Result<AppLockStatusDto> {
+        val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+        if (!hasToken) {
+            // No token — don't make network call, just return local state
+            return Result.success(
+                AppLockStatusDto(
+                    has_pin = SessionManager.localPinConfigured,
+                    unlocked = false
+                )
+            )
+        }
         return runCatching {
             val status = api.checkLockStatus()
             SessionManager.localHasPin = status.has_pin
@@ -96,7 +106,11 @@ class AppLockRepository {
                     unlocked = false // Always treat as locked on offline cold launch
                 )
             } else {
-                throw exception
+                // Any other exception (401, 403, etc.) — treat as offline fallback
+                AppLockStatusDto(
+                    has_pin = SessionManager.localPinConfigured,
+                    unlocked = false
+                )
             }
         }
     }

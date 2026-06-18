@@ -461,24 +461,14 @@ fun NoteDetailScreen(
                     contentText.contains("$")
                 }
 
-                // Note Content Panel
-                // The content now takes the full natural height of the note
-                // (no more `heightIn(max = 500.dp)` cap), so the outer
-                // vertical scroll carries the user through long notes. The
-                // WebView is forced into a non-scrolling, single-column layout
-                // to avoid the nested-scroll jankiness that was happening
-                // against the outer Column.
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                // Note Content Panel — full-screen, no Card chrome so the note fills
+                // the entire viewport edge-to-edge. The outer vertical scroll
+                // still carries the user through long notes.
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 160.dp)
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 160.dp)
-                    ) {
                         if (containsMath) {
                             val isDark = isSystemInDarkTheme()
                             // Tracks what we last injected into the WebView so
@@ -549,7 +539,6 @@ fun NoteDetailScreen(
                             )
                         }
                     }
-                }
 
                 // Quick Actions Row — secondary actions (Sync / History /
                 // Delete) that complement the sticky bottom bar. Kept
