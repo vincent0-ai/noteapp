@@ -316,8 +316,8 @@ fun NoteDetailScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp)
-                        .padding(top = 20.dp, bottom = 96.dp),
+                        .padding(horizontal = 16.dp)
+                        .padding(top = 16.dp, bottom = 96.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                 // Update Available Banner (Sync Now)
@@ -521,9 +521,9 @@ fun NoteDetailScreen(
                                         webView.evaluateJavascript("renderContent(`$escaped`, $isDark)", null)
                                     }
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+modifier = Modifier
+                                     .fillMaxWidth()
+                                     .padding(horizontal = 16.dp, vertical = 14.dp)
                             )
                         } else {
                             Text(
@@ -535,7 +535,7 @@ fun NoteDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 20.dp, vertical = 18.dp)
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
                             )
                         }
                     }

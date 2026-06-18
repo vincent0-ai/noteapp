@@ -278,7 +278,7 @@ private fun WriteTab(
             modifier = Modifier
                 .weight(1f)
                 .imePadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -449,37 +449,28 @@ private fun PreviewTab(content: String) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+        if (content.isBlank()) {
+            Text(
+                text = "Nothing to preview",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
             )
-        ) {
-            if (content.isBlank()) {
-                Text(
-                    text = "Nothing to preview",
-                    modifier = Modifier.padding(20.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                )
-            } else {
-                // Memoize the markdown render on `content` so it's only
-                // recomputed when the text actually changes, not on every
-                // recomposition of the Preview tab (e.g. focus / config
-                // changes that don't touch the content).
-                val rendered = remember(content) { renderMarkdownEditor(content) }
-                Text(
-                    text = rendered,
-                    modifier = Modifier.padding(20.dp),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
+        } else {
+            // Memoize the markdown render on `content` so it's only
+            // recomputed when the text actually changes, not on every
+            // recomposition of the Preview tab (e.g. focus / config
+            // changes that don't touch the content).
+            val rendered = remember(content) { renderMarkdownEditor(content) }
+            Text(
+                text = rendered,
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
     }
 }
