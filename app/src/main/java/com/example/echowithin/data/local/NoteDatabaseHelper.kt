@@ -92,7 +92,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             arrayOf("delete"),
             null,
             null,
-            "$COLUMN_UPDATED_AT DESC"
+            "$COLUMN_IS_PINNED DESC, $COLUMN_UPDATED_AT DESC"
         )
         
         cursor.use { c ->

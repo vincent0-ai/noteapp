@@ -675,6 +675,19 @@ class NotesViewModel(
         }
     }
 
+    fun toggleNotePin(noteId: String, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            repository.toggleNotePin(noteId)
+                .onSuccess { isPinned ->
+                    loadNotes()
+                    onDone(isPinned)
+                }
+                .onFailure { t ->
+                    uiState = uiState.copy(error = t.message ?: "Could not toggle pin")
+                }
+        }
+    }
+
     fun syncNoteWithOriginal(noteId: String, onDone: (String?) -> Unit) {
         viewModelScope.launch {
             repository.syncNoteWithOriginal(noteId)

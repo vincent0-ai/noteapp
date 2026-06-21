@@ -71,7 +71,7 @@ class NotesRepository(
         } catch (_: Exception) {
             null
         }
-        var serverCount = initialResponse?.notes?.size ?: 0
+        var serverCount = initialResponse?.pagination?.total ?: initialResponse?.notes?.size ?: 0
 
         // 2. Push pending local changes to the server
         val pushedNoteIds = mutableSetOf<String>()
@@ -121,7 +121,7 @@ class NotesRepository(
                                 content = note.content,
                                 reference = note.reference,
                                 tags = note.tags
-                             )
+                            )
                         )
                         if (response.success && !response.id.isNullOrBlank()) {
                             dbHelper.deletePhysically(note.id)
@@ -132,6 +132,13 @@ class NotesRepository(
                             )
                             serverCount++
                             pushedNoteIds.add(response.id)
+                            
+                            // Sync pin status if pinned offline
+                            if (note.isPinned) {
+                                try {
+                                    api.toggleNotePin(response.id)
+                                } catch (_: Exception) {}
+                            }
                         }
                     }
                     "edit" -> {
@@ -150,6 +157,14 @@ class NotesRepository(
                                 pendingOp = "none"
                             )
                             pushedNoteIds.add(note.id)
+                            
+                            // Sync pin status if it changed offline
+                            val serverNote = initialResponse?.notes?.find { it.id == note.id }
+                            if (serverNote != null && serverNote.is_pinned != note.isPinned) {
+                                try {
+                                    api.toggleNotePin(note.id)
+                                } catch (_: Exception) {}
+                            }
                         }
                     }
                     "delete" -> {
@@ -176,9 +191,24 @@ class NotesRepository(
             }
         }
 
-        // 3. Pull latest notes list from server
-        val response = api.getNotes(page = 1, perPage = 100)
-        val serverNotes = response.notes.map { it.toAppNote() }
+        // 3. Pull latest notes list from server by looping all pages
+        val serverNotes = mutableListOf<AppNote>()
+        var currentPage = 1
+        var hasMore = true
+        while (hasMore) {
+            try {
+                val response = api.getNotes(page = currentPage, perPage = 100)
+                serverNotes.addAll(response.notes.map { it.toAppNote() })
+                hasMore = response.pagination?.has_more == true
+                if (hasMore) {
+                    currentPage++
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // If a page fetch fails, abort the pull/delete phase to avoid deleting local notes due to partial sync
+                return
+            }
+        }
         val serverIds = serverNotes.map { it.id }.toSet()
 
         // 4. Reconcile server notes with local notes
@@ -440,6 +470,37 @@ class NotesRepository(
                 response.is_locked
             } else {
                 throw Exception(response.error ?: "Toggle lock failed")
+            }
+        }
+    }
+
+    suspend fun toggleNotePin(noteId: String): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            val isGuest = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
+            if (isGuest) {
+                val local = dbHelper.getNoteById(noteId) ?: throw Exception("Note not found")
+                val newPinned = !local.isPinned
+                dbHelper.saveNote(
+                    local.copy(isPinned = newPinned),
+                    isSynced = false,
+                    pendingOp = if (local.pendingOp == "none") "edit" else local.pendingOp
+                )
+                newPinned
+            } else {
+                val response = api.toggleNotePin(noteId)
+                if (response.success) {
+                    val local = dbHelper.getNoteById(noteId)
+                    if (local != null) {
+                        dbHelper.saveNote(
+                            local.copy(isPinned = response.is_pinned),
+                            isSynced = local.isSynced,
+                            pendingOp = local.pendingOp
+                        )
+                    }
+                    response.is_pinned
+                } else {
+                    throw Exception(response.error ?: "Toggle pin failed")
+                }
             }
         }
     }

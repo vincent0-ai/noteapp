@@ -216,6 +216,12 @@ data class ToggleLockResponse(
     val error: String? = null
 )
 
+data class TogglePinResponse(
+    val success: Boolean = false,
+    val is_pinned: Boolean = false,
+    val error: String? = null
+)
+
 // App Lock DTOs
 data class AppLockSetupDto(
     val pin: String

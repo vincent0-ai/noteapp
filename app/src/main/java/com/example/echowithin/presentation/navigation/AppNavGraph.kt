@@ -446,6 +446,11 @@ fun AppNavGraph(
                         onDone(newLocked)
                     }
                 },
+                onTogglePin = { onDone ->
+                    notesViewModel.toggleNotePin(noteId) { newPinned ->
+                        onDone(newPinned)
+                    }
+                },
                 onSyncClick = { onDone ->
                     notesViewModel.syncNoteWithOriginal(noteId) { msg ->
                         onDone(msg)

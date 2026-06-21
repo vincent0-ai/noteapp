@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.PushPin
 import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.material.icons.filled.Sync
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -134,6 +135,7 @@ fun NoteDetailScreen(
     onVersions: () -> Unit,
     onDelete: () -> Unit,
     onToggleLock: ((Boolean) -> Unit) -> Unit,
+    onTogglePin: ((Boolean) -> Unit) -> Unit,
     onSyncClick: (onDone: (String?) -> Unit) -> Unit,
     // Lock integration
     isLocked: Boolean,
@@ -198,6 +200,25 @@ fun NoteDetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            onTogglePin { newPinned ->
+                                noteState = noteState?.copy(isPinned = newPinned)
+                                android.widget.Toast.makeText(
+                                    context,
+                                    if (newPinned) "Note pinned to top" else "Note unpinned",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PushPin,
+                            contentDescription = if (noteState?.isPinned == true) "Unpin Note" else "Pin Note",
+                            tint = if (noteState?.isPinned == true) MaterialTheme.colorScheme.primary 
+                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                     IconButton(onClick = onEdit) {
                         Icon(
                             imageVector = Icons.Default.Edit,
@@ -226,6 +247,19 @@ fun NoteDetailScreen(
                                     singleExportLauncher.launch(defaultName)
                                 }
                             )
+                            if (noteState?.sourceNoteId != null) {
+                                DropdownMenuItem(
+                                    text = { Text("Sync with original") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        isSyncing = true
+                                        onSyncClick { msg ->
+                                            isSyncing = false
+                                            android.widget.Toast.makeText(context, msg ?: "Sync failed", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
                 },
@@ -583,55 +617,7 @@ modifier = Modifier
                         }
                     }
 
-                // Quick Actions Row — secondary actions (Sync / History /
-                // Delete) that complement the sticky bottom bar. Kept
-                // inline so the most-used actions (Edit / Copy / Share /
-                // Lock) get the always-visible bottom row.
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    if (noteState?.sourceNoteId != null) {
-                        IconButton(
-                            onClick = {
-                                isSyncing = true
-                                onSyncClick { msg ->
-                                    isSyncing = false
-                                    android.widget.Toast.makeText(context, msg ?: "Sync failed", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            enabled = !isSyncing
-                        ) {
-                            if (isSyncing) {
-                                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Sync,
-                                    contentDescription = "Sync with original",
-                                    tint = if (noteState?.updateAvailable == true) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
-                    IconButton(
-                        onClick = {
-                            if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
-                                android.widget.Toast.makeText(context, "Sign in to view versions", android.widget.Toast.LENGTH_SHORT).show()
-                            } else {
-                                onVersions()
-                            }
-                        }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.History,
-                            contentDescription = "Version history",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconButton(onClick = { showDeleteDialog = true }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = ErrorRed)
-                    }
-                }
+
                 }  // close inner Column
 
                 // ── Sticky bottom action bar ──
@@ -654,23 +640,23 @@ modifier = Modifier
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            .padding(horizontal = 6.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
                     ) {
                         androidx.compose.material3.FilledTonalButton(
                             onClick = onEdit,
                             modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                             colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
                                 contentColor = MaterialTheme.colorScheme.primary
                             )
                         ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
-                            Text("Edit", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
+                            Text("Edit", fontWeight = FontWeight.SemiBold, fontSize = 10.sp, maxLines = 1, softWrap = false)
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
@@ -681,12 +667,12 @@ modifier = Modifier
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
-                            Text("Copy", fontSize = 12.sp, maxLines = 1, softWrap = false)
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(12.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
+                            Text("Copy", fontSize = 10.sp, maxLines = 1, softWrap = false)
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
@@ -697,12 +683,12 @@ modifier = Modifier
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
-                            Text("Share", fontSize = 12.sp, maxLines = 1, softWrap = false)
+                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(12.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
+                            Text("Share", fontSize = 10.sp, maxLines = 1, softWrap = false)
                         }
                         androidx.compose.material3.OutlinedButton(
                             onClick = {
@@ -726,8 +712,8 @@ modifier = Modifier
                                 }
                             },
                             modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 6.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(10.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                             colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
                                 contentColor = if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
                             ),
@@ -740,16 +726,49 @@ modifier = Modifier
                             Icon(
                                 if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(12.dp)
                             )
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(4.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 if (noteState?.isLocked == true) "Locked" else "Lock",
                                 fontWeight = FontWeight.SemiBold,
-                                fontSize = 12.sp,
+                                fontSize = 10.sp,
                                 maxLines = 1,
                                 softWrap = false
                             )
+                        }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = {
+                                if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
+                                    android.widget.Toast.makeText(context, "Sign in to view versions", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    onVersions()
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                        ) {
+                            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(12.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
+                            Text("History", fontSize = 10.sp, maxLines = 1, softWrap = false)
+                        }
+                        androidx.compose.material3.OutlinedButton(
+                            onClick = { showDeleteDialog = true },
+                            modifier = Modifier.weight(1f),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
+                                contentColor = ErrorRed
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                ErrorRed.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(12.dp))
+                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
+                            Text("Delete", fontSize = 10.sp, maxLines = 1, softWrap = false)
                         }
                     }
                 }
@@ -861,7 +880,6 @@ private fun renderMarkdown(
 
             // Empty line → extra spacing
             if (line.isBlank()) {
-                append("\n")
                 if (i < lines.size - 1) append("\n")
                 i++
                 continue

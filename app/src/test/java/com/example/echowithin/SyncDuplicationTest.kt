@@ -165,6 +165,7 @@ class SyncDuplicationTest {
         override suspend fun getProfile(): ProfileResponse = ProfileResponse("user", "email", "premium")
         override suspend fun deleteNote(noteId: String): GenericResponse = TODO()
         override suspend fun toggleNoteLock(noteId: String): ToggleLockResponse = TODO()
+        override suspend fun toggleNotePin(noteId: String): TogglePinResponse = TODO()
         override suspend fun getProposals(): ProposalsListDto = TODO()
         override suspend fun createShare(noteId: String, body: ShareRequestDto): ShareResponseDto = TODO()
         override suspend fun createShareMultipart(

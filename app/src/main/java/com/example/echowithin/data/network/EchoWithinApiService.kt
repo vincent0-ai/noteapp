@@ -48,6 +48,9 @@ interface EchoWithinApiService {
     @POST("api/v1/notes/toggle_lock/{noteId}")
     suspend fun toggleNoteLock(@Path("noteId") noteId: String): ToggleLockResponse
 
+    @POST("api/v1/notes/toggle_pin/{noteId}")
+    suspend fun toggleNotePin(@Path("noteId") noteId: String): TogglePinResponse
+
     @GET("api/v1/notes/proposals")
     suspend fun getProposals(): ProposalsListDto
 
