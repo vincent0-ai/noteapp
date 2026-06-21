@@ -742,6 +742,34 @@ class NotesViewModel(
         }
     }
 
+    fun importNotes(imported: List<com.example.echowithin.data.repository.NoteImportExportHelper.ImportedNote>, onComplete: (Int) -> Unit) {
+        viewModelScope.launch {
+            var count = 0
+            for (imp in imported) {
+                // Ensure note content starts with the title if title is not blank, or handle accordingly.
+                // In EchoWithin, the first line is treated as the title candidate.
+                val contentWithTitle = if (imp.title.isNotBlank() && !imp.content.startsWith(imp.title)) {
+                    "${imp.title}\n${imp.content}"
+                } else {
+                    imp.content
+                }
+                val res = repository.createNote(
+                    content = contentWithTitle,
+                    reference = imp.reference,
+                    tags = imp.tags
+                )
+                if (res.isSuccess) {
+                    count++
+                }
+            }
+            if (count > 0) {
+                loadNotes()
+                syncNotes(force = true)
+            }
+            onComplete(count)
+        }
+    }
+
     companion object {
         fun factory(): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")

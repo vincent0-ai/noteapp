@@ -364,7 +364,12 @@ fun AppNavGraph(
                 onConfirmUpdate = { notesViewModel.downloadAndInstallUpdate(context, notesViewModel.uiState.updateInfo?.apkUrl ?: "") },
                 onDismissUpdate = { notesViewModel.dismissUpdate() },
                 // Navigation
-                onSearchClick = { navController.navigate(AppRoute.Search) }
+                onSearchClick = { navController.navigate(AppRoute.Search) },
+                onImportNotes = { imported ->
+                    notesViewModel.importNotes(imported) { count ->
+                        android.widget.Toast.makeText(context, "Imported $count note${if (count != 1) "s" else ""} successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
             )
         }
 

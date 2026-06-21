@@ -2,6 +2,8 @@ package com.example.echowithin.data.repository
 
 import com.example.echowithin.EchoWithinApplication
 import com.example.echowithin.data.local.NoteDatabaseHelper
+import com.example.echowithin.data.local.NoteDbHelper
+import com.example.echowithin.data.network.EchoWithinApiService
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.data.model.CreateNoteRequest
 import com.example.echowithin.data.model.NoteDto
@@ -12,9 +14,10 @@ import com.example.echowithin.data.network.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class NotesRepository {
-    private val api = ApiClient.apiService
-    private val dbHelper = NoteDatabaseHelper(EchoWithinApplication.instance)
+class NotesRepository(
+    private val api: EchoWithinApiService = ApiClient.apiService,
+    private val dbHelper: NoteDbHelper = NoteDatabaseHelper(EchoWithinApplication.instance)
+) {
 
     suspend fun getNotes(page: Int = 1, perPage: Int = 20): Result<List<AppNote>> = withContext(Dispatchers.IO) {
         runCatching {
@@ -66,6 +69,7 @@ class NotesRepository {
         var serverCount = initialResponse?.notes?.size ?: 0
 
         // 2. Push pending local changes to the server
+        val pushedNoteIds = mutableSetOf<String>()
         val pending = dbHelper.getPendingNotes()
         for (note in pending) {
             // Check character size limits
@@ -116,8 +120,13 @@ class NotesRepository {
                         )
                         if (response.success && !response.id.isNullOrBlank()) {
                             dbHelper.deletePhysically(note.id)
-                            dbHelper.saveNote(note.copy(id = response.id, isSynced = true, pendingOp = "none"))
+                            dbHelper.saveNote(
+                                note.copy(id = response.id, isSynced = true, pendingOp = "none"),
+                                isSynced = true,
+                                pendingOp = "none"
+                            )
                             serverCount++
+                            pushedNoteIds.add(response.id)
                         }
                     }
                     "edit" -> {
@@ -130,7 +139,12 @@ class NotesRepository {
                             )
                         )
                         if (response.success) {
-                            dbHelper.saveNote(note.copy(isSynced = true, pendingOp = "none"))
+                            dbHelper.saveNote(
+                                note.copy(isSynced = true, pendingOp = "none"),
+                                isSynced = true,
+                                pendingOp = "none"
+                            )
+                            pushedNoteIds.add(note.id)
                         }
                     }
                     "delete" -> {
@@ -164,19 +178,57 @@ class NotesRepository {
 
         // 4. Reconcile server notes with local notes
         for (serverNote in serverNotes) {
+            if (pushedNoteIds.contains(serverNote.id)) {
+                continue
+            }
             val local = dbHelper.getNoteById(serverNote.id)
             if (local == null) {
-                dbHelper.saveNote(serverNote)
+                dbHelper.saveNote(serverNote, isSynced = true, pendingOp = "none")
             } else if (local.isSynced) {
-                dbHelper.saveNote(serverNote)
+                if (isServerNoteNewerOrEqual(serverNote, local)) {
+                    dbHelper.saveNote(serverNote, isSynced = true, pendingOp = "none")
+                }
             }
         }
 
         // 5. Remove local notes that were deleted on the server and are already synced
         val localNotes = dbHelper.getAllNotes()
         for (localNote in localNotes) {
-            if (!localNote.id.startsWith("local_") && !serverIds.contains(localNote.id) && localNote.isSynced) {
+            if (!localNote.id.startsWith("local_") && 
+                !serverIds.contains(localNote.id) && 
+                localNote.isSynced &&
+                !pushedNoteIds.contains(localNote.id)
+            ) {
                 dbHelper.deletePhysically(localNote.id)
+            }
+        }
+    }
+
+    internal fun isServerNoteNewerOrEqual(serverNote: AppNote, localNote: AppNote): Boolean {
+        val serverTime = serverNote.updatedAt
+        val localTime = localNote.updatedAt
+        
+        if (serverTime.isEmpty()) return false
+        if (localTime.isEmpty()) return true
+        
+        return try {
+            val serverInstant = java.time.Instant.parse(serverTime)
+            val localInstant = java.time.Instant.parse(localTime)
+            !serverInstant.isBefore(localInstant)
+        } catch (_: Exception) {
+            try {
+                val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+                    timeZone = java.util.TimeZone.getTimeZone("UTC")
+                }
+                val serverDate = format.parse(serverTime)
+                val localDate = format.parse(localTime)
+                if (serverDate != null && localDate != null) {
+                    !serverDate.before(localDate)
+                } else {
+                    serverTime >= localTime
+                }
+            } catch (_: Exception) {
+                serverTime >= localTime
             }
         }
     }
@@ -362,7 +414,7 @@ class NotesRepository {
             } else {
                 val response = api.getNoteById(noteId)
                 val note = response.toAppNote()
-                dbHelper.saveNote(note)
+                dbHelper.saveNote(note, isSynced = true, pendingOp = "none")
                 note
             }
         }
@@ -374,7 +426,11 @@ class NotesRepository {
             if (response.success) {
                 val local = dbHelper.getNoteById(noteId)
                 if (local != null) {
-                    dbHelper.saveNote(local.copy(isLocked = response.is_locked))
+                    dbHelper.saveNote(
+                        local.copy(isLocked = response.is_locked),
+                        isSynced = local.isSynced,
+                        pendingOp = local.pendingOp
+                    )
                 }
                 response.is_locked
             } else {
@@ -399,7 +455,9 @@ class NotesRepository {
                                 title = title,
                                 updateAvailable = false,
                                 isSynced = true
-                            )
+                            ),
+                            isSynced = true,
+                            pendingOp = "none"
                         )
                     }
                 }

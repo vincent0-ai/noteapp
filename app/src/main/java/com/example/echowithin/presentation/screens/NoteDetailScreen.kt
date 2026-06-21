@@ -37,6 +37,10 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.material.icons.filled.Sync
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.MoreVert
+import com.example.echowithin.data.repository.NoteImportExportHelper
 
 // Pre-compiled regex patterns for markdown rendering
 private val headingRegex = Regex("^(#+)\\s+(.*)$")
@@ -143,6 +147,22 @@ fun NoteDetailScreen(
     var noteState by remember { mutableStateOf(initialNote) }
     var isLoading by remember { mutableStateOf(initialNote == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val singleExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/markdown")
+    ) { uri ->
+        if (uri != null && noteState != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    val content = NoteImportExportHelper.exportToMarkdown(noteState!!)
+                    outputStream.write(content.toByteArray(Charsets.UTF_8))
+                }
+                android.widget.Toast.makeText(context, "Note exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     var showDeleteDialog by remember { mutableStateOf(false) }
     var isSyncing by remember { mutableStateOf(false) }
 
@@ -184,6 +204,29 @@ fun NoteDetailScreen(
                             contentDescription = "Edit Note",
                             tint = MaterialTheme.colorScheme.primary
                         )
+                    }
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More Options",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Export as Markdown") },
+                                onClick = {
+                                    menuExpanded = false
+                                    val defaultName = (noteState?.title ?: "note").replace(Regex("[\\\\/:*?\"<>|]"), "_").trim() + ".md"
+                                    singleExportLauncher.launch(defaultName)
+                                }
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

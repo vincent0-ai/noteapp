@@ -1,0 +1,35 @@
+diff --git a/app/src/main/java/com/example/echowithin/presentation/screens/NoteVersionsScreen.kt b/app/src/main/java/com/example/echowithin/presentation/screens/NoteVersionsScreen.kt
+--- a/app/src/main/java/com/example/echowithin/presentation/screens/NoteVersionsScreen.kt
++++ b/app/src/main/java/com/example/echowithin/presentation/screens/NoteVersionsScreen.kt
+@@ -147,13 +147,15 @@
+-                                    Surface(
+-                                        shape = RoundedCornerShape(8.dp),
+-                                        color = if (version.is_proposal) MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+-                                        border = BorderStroke(1.dp, if (version.is_proposal) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
+-                                    ) {
+-                                        Text(
+-                                            text = version.status.uppercase(),
+-                                            style = MaterialTheme.typography.labelSmall,
+-                                            fontWeight = FontWeight.Bold,
+-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+-                                            color = if (version.is_proposal) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
+-                                        )
+-                                    }
++                                    if (version.is_proposal) {
++                                        Surface(
++                                            shape = RoundedCornerShape(8.dp),
++                                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
++                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
++                                        ) {
++                                            Text(
++                                                text = version.status.uppercase(),
++                                                style = MaterialTheme.typography.labelSmall,
++                                                fontWeight = FontWeight.Bold,
++                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
++                                                color = MaterialTheme.colorScheme.secondary
++                                            )
++                                        }
++                                    }
+@@ -189,3 +191,3 @@
+-                                    if (version.is_proposal) {
++                                    if (version.is_proposal && version.status.equals("pending", ignoreCase = true)) {

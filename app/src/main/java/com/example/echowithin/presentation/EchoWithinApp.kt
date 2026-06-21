@@ -30,6 +30,10 @@ import com.example.echowithin.ui.theme.BrandAmber
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import com.example.echowithin.data.network.NetworkMonitor
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
+import androidx.compose.foundation.layout.ime
+import androidx.compose.material3.ScaffoldDefaults
 
 @Composable
 fun EchoWithinApp() {
@@ -121,7 +125,8 @@ fun EchoWithinApp() {
                     }
                 }
             }
-        }
+        },
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.exclude(WindowInsets.ime)
     ) { innerPadding ->
         AppNavGraph(
             navController = navController,

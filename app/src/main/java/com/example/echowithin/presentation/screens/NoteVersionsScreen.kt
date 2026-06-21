@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.components.ProposalReviewDialog
 import com.example.echowithin.presentation.viewmodel.NoteVersionsUiState
+import com.example.echowithin.data.model.VersionDto
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.History
@@ -144,18 +145,20 @@ fun NoteVersionsScreen(
                                         fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary
                                     )
-                                    Surface(
-                                        shape = RoundedCornerShape(8.dp),
-                                        color = if (version.is_proposal) MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f) else MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                        border = BorderStroke(1.dp, if (version.is_proposal) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary)
-                                    ) {
-                                        Text(
-                                            text = version.status.uppercase(),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                            color = if (version.is_proposal) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.primary
-                                        )
+                                    if (version.shouldShowStatusBadge()) {
+                                        Surface(
+                                            shape = RoundedCornerShape(8.dp),
+                                            color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.1f),
+                                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)
+                                        ) {
+                                            Text(
+                                                text = version.status.uppercase(),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                color = MaterialTheme.colorScheme.secondary
+                                            )
+                                        }
                                     }
                                 }
 
@@ -186,7 +189,7 @@ fun NoteVersionsScreen(
                                         Text("Restore", style = MaterialTheme.typography.bodySmall)
                                     }
 
-                                    if (version.is_proposal) {
+                                    if (version.shouldShowApproveRejectButtons()) {
                                         Button(
                                             onClick = {
                                                 reviewTarget = ReviewTarget(version.version_id, true)
@@ -248,3 +251,9 @@ fun NoteVersionsScreen(
 }
 
 private data class ReviewTarget(val versionId: String, val isApprove: Boolean)
+
+fun VersionDto.shouldShowStatusBadge(): Boolean = is_proposal
+
+fun VersionDto.shouldShowApproveRejectButtons(): Boolean =
+    is_proposal && status.equals("pending", ignoreCase = true)
+

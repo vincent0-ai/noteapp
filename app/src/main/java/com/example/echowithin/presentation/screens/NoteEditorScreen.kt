@@ -43,6 +43,9 @@ import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.FormatStrikethrough
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 
 // Pre-compiled regex for markdown preview rendering
 private val HEADING_REGEX_EDITOR = Regex("^(#+)\\s+(.*)$")
@@ -122,7 +125,8 @@ fun NoteEditorScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.exclude(WindowInsets.ime)
     ) { innerPadding ->
         if (initialNote?.isLocked == true && isLocked) {
             // Locked note — PIN verification
@@ -270,98 +274,143 @@ private fun WriteTab(
     wordCount: Int,
     maxChars: Int
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Main content area (scrollable)
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .imePadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Main content field
-            OutlinedTextField(
-                value = contentField,
-                onValueChange = onContentChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Write your thoughts...") },
-                minLines = 12,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary
-                )
-            )
+    var isDetailsExpanded by remember { mutableStateOf(false) }
 
-            // Character counter + word count
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+    Column(
+        modifier = Modifier.fillMaxSize().imePadding()
+    ) {
+        // Main editor wrapper that handles keyboard padding and fills available space
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
+            // Typing area: fills maximum height and scrolls internally
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
-                Text(
-                    text = "$wordCount words",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                TextField(
+                    value = contentField,
+                    onValueChange = onContentChange,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    placeholder = { Text("Write your thoughts...") },
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        disabledIndicatorColor = Color.Transparent,
+                    )
                 )
-                Text(
-                    text = if (maxChars == Int.MAX_VALUE) "$charCount" else "$charCount / ${"%,d".format(maxChars)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = when {
-                        maxChars == Int.MAX_VALUE -> MaterialTheme.colorScheme.onSurfaceVariant
-                        charCount > (maxChars * 0.9).toInt() -> ErrorRed
-                        charCount > (maxChars * 0.75).toInt() -> MaterialTheme.colorScheme.secondary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                )
+
+                // Word count / Character counter
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "$wordCount words",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = if (maxChars == Int.MAX_VALUE) "$charCount" else "$charCount / ${"%,d".format(maxChars)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = when {
+                            maxChars == Int.MAX_VALUE -> MaterialTheme.colorScheme.onSurfaceVariant
+                            charCount > (maxChars * 0.9).toInt() -> ErrorRed
+                            charCount > (maxChars * 0.75).toInt() -> MaterialTheme.colorScheme.secondary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+                    )
+                }
             }
 
-            // Compact reference field
-            OutlinedTextField(
-                value = reference,
-                onValueChange = onReferenceChange,
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = {
-                    Text(
-                        "Reference link (optional)",
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall,
-                shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary
-                )
-            )
-
-            // Compact tags field
-            OutlinedTextField(
-                value = tags,
-                onValueChange = onTagsChange,
+            // Collapsible details panel (Reference & Tags)
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-                placeholder = {
+                    .padding(horizontal = 16.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isDetailsExpanded = !isDetailsExpanded }
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        "Tags, comma separated",
-                        style = MaterialTheme.typography.bodySmall
+                        text = "Details (Reference & Tags)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
                     )
-                },
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall,
-                shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                    focusedLabelColor = MaterialTheme.colorScheme.primary
-                )
-            )
+                    Icon(
+                        imageVector = if (isDetailsExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isDetailsExpanded) "Collapse details" else "Expand details",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                if (isDetailsExpanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextField(
+                            value = reference,
+                            onValueChange = onReferenceChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    "Reference link (optional)",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            )
+                        )
+
+                        TextField(
+                            value = tags,
+                            onValueChange = onTagsChange,
+                            modifier = Modifier.fillMaxWidth(),
+                            placeholder = {
+                                Text(
+                                    "Tags, comma separated",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            },
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodySmall,
+                            colors = TextFieldDefaults.colors(
+                                focusedContainerColor = Color.Transparent,
+                                unfocusedContainerColor = Color.Transparent,
+                                disabledContainerColor = Color.Transparent,
+                                focusedIndicatorColor = Color.Transparent,
+                                unfocusedIndicatorColor = Color.Transparent,
+                                disabledIndicatorColor = Color.Transparent,
+                            )
+                        )
+                    }
+                }
+            }
         }
 
         // ── Markdown Formatting Toolbar (bottom-anchored, Notesnook-style) ──

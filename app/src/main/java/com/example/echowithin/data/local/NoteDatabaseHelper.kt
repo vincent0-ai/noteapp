@@ -6,7 +6,19 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import com.example.echowithin.data.model.AppNote
 
-class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
+interface NoteDbHelper {
+    fun getAllNotes(): List<AppNote>
+    fun getNoteById(id: String): AppNote?
+    fun getPendingNotes(): List<AppNote>
+    fun saveNote(note: AppNote, isSynced: Boolean = note.isSynced, pendingOp: String = note.pendingOp)
+    fun markDeleted(id: String)
+    fun deletePhysically(id: String)
+    fun clearSyncFlags()
+    fun clearAll()
+    fun clearSyncedNotes()
+}
+
+class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION), NoteDbHelper {
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
@@ -70,7 +82,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         }
     }
 
-    fun getAllNotes(): List<AppNote> {
+    override fun getAllNotes(): List<AppNote> {
         val notes = mutableListOf<AppNote>()
         val db = readableDatabase
         val cursor = db.query(
@@ -124,7 +136,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         return notes
     }
 
-    fun getNoteById(id: String): AppNote? {
+    override fun getNoteById(id: String): AppNote? {
         val db = readableDatabase
         val cursor = db.query(
             TABLE_NOTES,
@@ -160,7 +172,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         return null
     }
 
-    fun getPendingNotes(): List<AppNote> {
+    override fun getPendingNotes(): List<AppNote> {
         val notes = mutableListOf<AppNote>()
         val db = readableDatabase
         // A note is "pending" only if it either has an explicit pending op
@@ -217,7 +229,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         return notes
     }
 
-    fun saveNote(note: AppNote, isSynced: Boolean = true, pendingOp: String = "none") {
+    override fun saveNote(note: AppNote, isSynced: Boolean, pendingOp: String) {
         val db = writableDatabase
         val values = ContentValues().apply {
             put(COLUMN_ID, note.id)
@@ -237,7 +249,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.replace(TABLE_NOTES, null, values)
     }
 
-    fun markDeleted(id: String) {
+    override fun markDeleted(id: String) {
         val db = writableDatabase
         val note = getNoteById(id)
         if (note == null) {
@@ -259,7 +271,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         }
     }
 
-    fun deletePhysically(id: String) {
+    override fun deletePhysically(id: String) {
         val db = writableDatabase
         db.delete(TABLE_NOTES, "$COLUMN_ID = ?", arrayOf(id))
     }
@@ -272,7 +284,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
      * server (the original duplicate-notes bug). The logout path now
      * uses [clearAll] instead.
      */
-    fun clearSyncFlags() {
+    override fun clearSyncFlags() {
         val db = writableDatabase
         val values = android.content.ContentValues().apply {
             put(COLUMN_IS_SYNCED, 0)
@@ -284,7 +296,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
     /**
      * Deletes ALL synced notes. Only use for explicit "Delete Account" or full data wipe.
      */
-    fun clearAll() {
+    override fun clearAll() {
         val db = writableDatabase
         db.delete(TABLE_NOTES, null, null)
     }
@@ -294,7 +306,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
      * offline-only notes (local_* IDs or never-synced notes with no pending op).
      * Used on session expiry/401 so the user retains their private local notes.
      */
-    fun clearSyncedNotes() {
+    override fun clearSyncedNotes() {
         val db = writableDatabase
         // Delete notes that are either:
         // - is_synced = 1 (fully synced with server)

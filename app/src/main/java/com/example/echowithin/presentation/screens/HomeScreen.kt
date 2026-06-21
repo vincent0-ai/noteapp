@@ -38,6 +38,10 @@ import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.animation.core.*
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.MoreVert
+import com.example.echowithin.data.repository.NoteImportExportHelper
 import androidx.compose.foundation.background
 import com.example.echowithin.ui.theme.ErrorRed
 
@@ -110,6 +114,7 @@ fun HomeScreen(
     onDismissOfflinePrivacy: () -> Unit = {},
     // Navigation
     onSearchClick: () -> Unit,
+    onImportNotes: (List<NoteImportExportHelper.ImportedNote>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Tabs available in offline mode: only Notes and Locked
@@ -125,6 +130,53 @@ fun HomeScreen(
     // Memoize filtered lists to avoid creating new List instances on every recomposition
     val unlockedNotes = remember(notes) { notes.filter { !it.isLocked } }
     val lockedNotes = remember(notes) { notes.filter { it.isLocked } }
+
+    val context = LocalContext.current
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (!uris.isNullOrEmpty()) {
+            val imported = mutableListOf<NoteImportExportHelper.ImportedNote>()
+            try {
+                for (uri in uris) {
+                    val type = context.contentResolver.getType(uri)
+                    val filename = uri.path?.substringAfterLast('/') ?: "imported_note"
+                    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        if (type == "application/zip" || filename.endsWith(".zip", ignoreCase = true)) {
+                            imported.addAll(NoteImportExportHelper.importFromZip(inputStream))
+                        } else {
+                            val text = inputStream.bufferedReader().use { it.readText() }
+                            imported.add(NoteImportExportHelper.parseMarkdown(text, filename.substringBeforeLast('.')))
+                        }
+                    }
+                }
+                if (imported.isNotEmpty()) {
+                    onImportNotes(imported)
+                } else {
+                    android.widget.Toast.makeText(context, "No notes found to import", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(context, "Failed to import: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    NoteImportExportHelper.exportToZip(unlockedNotes, outputStream)
+                }
+                android.widget.Toast.makeText(context, "Notes exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     if (updateInfo != null) {
         UpdateDialog(
@@ -260,6 +312,36 @@ fun HomeScreen(
                                 contentDescription = "Sync Notes",
                                 tint = if (isOnline && !isOfflineMode) MaterialTheme.colorScheme.onSurface
                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                            )
+                        }
+                    }
+                    
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More Options",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Import Notes") },
+                                onClick = {
+                                    menuExpanded = false
+                                    importLauncher.launch(arrayOf("text/*", "application/zip", "application/x-zip-compressed"))
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export All Notes (ZIP)") },
+                                onClick = {
+                                    menuExpanded = false
+                                    exportLauncher.launch("echowithin_export.zip")
+                                }
                             )
                         }
                     }
