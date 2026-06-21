@@ -13,11 +13,14 @@ import com.example.echowithin.data.network.ApiClient
 import com.example.echowithin.data.network.SessionManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class NotesRepository(
     private val api: EchoWithinApiService = ApiClient.apiService,
     private val dbHelper: NoteDbHelper = NoteDatabaseHelper(EchoWithinApplication.instance)
 ) {
+    private val syncMutex = Mutex()
 
     suspend fun getNotes(page: Int = 1, perPage: Int = 20): Result<List<AppNote>> = withContext(Dispatchers.IO) {
         runCatching {
@@ -31,7 +34,9 @@ class NotesRepository(
         runCatching {
             val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
             if (hasToken) {
-                syncNotesInternal()
+                syncMutex.withLock {
+                    syncNotesInternal()
+                }
             }
         }
     }
@@ -235,7 +240,7 @@ class NotesRepository(
 
     suspend fun createNote(content: String, reference: String, tags: List<String>): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val tempId = "local_" + System.currentTimeMillis()
+            val tempId = "local_" + java.util.UUID.randomUUID().toString()
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
                 .format(java.util.Date())
             
