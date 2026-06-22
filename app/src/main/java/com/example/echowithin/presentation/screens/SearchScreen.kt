@@ -266,6 +266,22 @@ private val searchMdInlineCodeRegex = Regex("`+")
 private val searchMdLinkRegex = Regex("\\[(.*?)\\]\\(.*?\\)")
 private val searchMdImageRegex = Regex("!\\[(.*?)\\]\\(.*?\\)")
 
+private fun stripBackslashEscapes(text: String): String {
+    val sb = StringBuilder()
+    var i = 0
+    val escapable = setOf('\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!', '~', '$')
+    while (i < text.length) {
+        if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in escapable) {
+            sb.append(text[i + 1])
+            i += 2
+        } else {
+            sb.append(text[i])
+            i++
+        }
+    }
+    return sb.toString()
+}
+
 private fun stripMarkdown(text: String): String {
     var clean = text
     clean = clean.replace(searchMdHeadingRegex, "")
@@ -275,5 +291,5 @@ private fun stripMarkdown(text: String): String {
     clean = clean.replace(searchMdInlineCodeRegex, "")
     clean = clean.replace(searchMdLinkRegex, "$1")
     clean = clean.replace(searchMdImageRegex, "$1")
-    return clean
+    return stripBackslashEscapes(clean)
 }

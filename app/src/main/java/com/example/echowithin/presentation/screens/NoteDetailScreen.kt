@@ -963,7 +963,17 @@ private fun AnnotatedString.Builder.appendInlineFormatting(
     secondaryColor: Color
 ) {
     var i = 0
+    val escapable = setOf('\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!', '~', '$')
     while (i < text.length) {
+        // Backslash escaping
+        if (text[i] == '\\' && i + 1 < text.length) {
+            val nextChar = text[i + 1]
+            if (nextChar in escapable) {
+                append(nextChar.toString())
+                i += 2
+                continue
+            }
+        }
         // Single line block math $$equation$$
         if (i + 1 < text.length && text[i] == '$' && text[i + 1] == '$') {
             val endIdx = text.indexOf("$$", i + 2)

@@ -1702,6 +1702,22 @@ private fun formatLastSynced(epochMillis: Long): String {
     }
 }
 
+private fun stripBackslashEscapes(text: String): String {
+    val sb = StringBuilder()
+    var i = 0
+    val escapable = setOf('\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!', '~', '$')
+    while (i < text.length) {
+        if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in escapable) {
+            sb.append(text[i + 1])
+            i += 2
+        } else {
+            sb.append(text[i])
+            i++
+        }
+    }
+    return sb.toString()
+}
+
 private fun stripMarkdown(text: String): String {
     var clean = text
     clean = REGEX_HEADING.replace(clean, "")
@@ -1711,7 +1727,7 @@ private fun stripMarkdown(text: String): String {
     clean = REGEX_BACKTICK.replace(clean, "")
     clean = REGEX_LINK.replace(clean, "$1")
     clean = REGEX_IMAGE.replace(clean, "$1")
-    return clean
+    return stripBackslashEscapes(clean)
 }
 
 @Composable
