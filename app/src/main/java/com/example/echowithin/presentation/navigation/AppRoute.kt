@@ -9,6 +9,7 @@ object AppRoute {
     const val Search = "search"
     const val Premium = "premium"
     const val Settings = "settings"
+    const val Trash = "trash"
     const val AppLock = "app_lock"
     const val Editor = "editor"
     const val EditorWithArg = "editor?noteId={noteId}"

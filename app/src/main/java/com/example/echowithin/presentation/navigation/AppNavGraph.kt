@@ -369,7 +369,13 @@ fun AppNavGraph(
                     notesViewModel.importNotes(imported) { count ->
                         android.widget.Toast.makeText(context, "Imported $count note${if (count != 1) "s" else ""} successfully!", android.widget.Toast.LENGTH_SHORT).show()
                     }
-                }
+                },
+                onBatchDeleteNotes = { noteIds ->
+                    notesViewModel.deleteNotes(noteIds) { count ->
+                        android.widget.Toast.makeText(context, "Deleted $count note${if (count != 1) "s" else ""}", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                onTrashClick = { navController.navigate(AppRoute.Trash) }
             )
         }
 
@@ -508,6 +514,23 @@ fun AppNavGraph(
                     versionsViewModel.decide(versionId, approve, comment, autoApproveSubsequent)
                 },
                 onClearFeedback = { versionsViewModel.clearFeedback() }
+            )
+        }
+
+        composable(AppRoute.Trash) {
+            LaunchedEffect(Unit) { notesViewModel.loadTrash() }
+            com.example.echowithin.presentation.screens.TrashScreen(
+                trashedNotes = notesViewModel.uiState.trashedNotes,
+                onBack = { navController.popBackStack() },
+                onRestore = { noteId ->
+                    notesViewModel.restoreNote(noteId) {}
+                },
+                onPermanentDelete = { noteId ->
+                    notesViewModel.permanentDeleteNote(noteId) {}
+                },
+                onEmptyTrash = {
+                    notesViewModel.emptyTrash {}
+                }
             )
         }
 

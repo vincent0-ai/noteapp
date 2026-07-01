@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.FormatBold
 import androidx.compose.material.icons.filled.FormatItalic
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.FormatStrikethrough
@@ -46,12 +45,48 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
 
 // Pre-compiled regex for markdown preview rendering
 private val HEADING_REGEX_EDITOR = Regex("^(#+)\\s+(.*)$")
 private val BLOCKQUOTE_REGEX_EDITOR = Regex("^\\s*>\\s*(.*)")
 private val LINK_REGEX_EDITOR = Regex("\\[(.*?)\\]\\(.*?\\)")
 private val STRIKETHROUGH_REGEX_EDITOR = Regex("~~(.*?)~~")
+
+// Auto-numbering: matches bullet lists (- , * ) and ordered lists (1. , 2. )
+private val BULLET_LIST_REGEX = Regex("^(\\s*)([-*])\\s(.*)$")
+private val ORDERED_LIST_REGEX = Regex("^(\\s*)(\\d+)\\.\\s(.*)$")
+
+/**
+ * Simple undo/redo manager that keeps a bounded history of TextFieldValue snapshots.
+ */
+private class UndoRedoManager(private val maxHistory: Int = 50) {
+    private val undoStack = mutableListOf<TextFieldValue>()
+    private val redoStack = mutableListOf<TextFieldValue>()
+
+    fun push(value: TextFieldValue) {
+        undoStack.add(value)
+        if (undoStack.size > maxHistory) undoStack.removeAt(0)
+        redoStack.clear()
+    }
+
+    fun undo(current: TextFieldValue): TextFieldValue? {
+        if (undoStack.isEmpty()) return null
+        redoStack.add(current)
+        return undoStack.removeAt(undoStack.lastIndex)
+    }
+
+    fun redo(current: TextFieldValue): TextFieldValue? {
+        if (redoStack.isEmpty()) return null
+        undoStack.add(current)
+        return redoStack.removeAt(redoStack.lastIndex)
+    }
+
+    val canUndo: Boolean get() = undoStack.isNotEmpty()
+    val canRedo: Boolean get() = redoStack.isNotEmpty()
+}
 
 // Limits are dynamic: Guest (no token) -> Unlimited; Sync users -> Free is 20K, Premium is 100K.
 private fun getMaxCharLimit(): Int {
@@ -76,10 +111,18 @@ fun NoteEditorScreen(
     onVerifyPin: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // Track the initial content to detect actual changes (not just "non-blank")
+    val initialContent = remember { initialNote?.content.orEmpty() }
+    val initialReference = remember { initialNote?.reference.orEmpty() }
+    val initialTags = remember { initialNote?.tags?.joinToString(",").orEmpty() }
     var contentField by remember { mutableStateOf(TextFieldValue(initialNote?.content.orEmpty())) }
     var reference by remember { mutableStateOf(initialNote?.reference.orEmpty()) }
     var tags by remember { mutableStateOf(initialNote?.tags?.joinToString(",").orEmpty()) }
     var selectedTab by remember { mutableIntStateOf(0) }
+    val undoRedoManager = remember { UndoRedoManager() }
+    // Track canUndo/canRedo as state so toolbar recomposes
+    var canUndo by remember { mutableStateOf(false) }
+    var canRedo by remember { mutableStateOf(false) }
 
     val content = contentField.text
     val hasChanges = content.isNotBlank()
@@ -88,12 +131,27 @@ fun NoteEditorScreen(
         if (content.isBlank()) 0 else content.trim().split("\\s+".toRegex()).size
     }
 
+    // Auto-save on back: save draft if there are real changes
+    val autoSaveOnBack = {
+        val hasRealChanges = content != initialContent ||
+            reference != initialReference ||
+            tags != initialTags
+        if (hasRealChanges && content.isNotBlank() && !isSaving) {
+            onSave(
+                content,
+                reference,
+                tags.split(',').map { it.trim() }.filter { it.isNotBlank() }
+            )
+        }
+        onBack()
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { EchoWithinTopBarTitle() },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = autoSaveOnBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
@@ -122,11 +180,12 @@ fun NoteEditorScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets(0.dp)
             )
         },
         containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = ScaffoldDefaults.contentWindowInsets.exclude(WindowInsets.ime)
+        contentWindowInsets = WindowInsets(0.dp)
     ) { innerPadding ->
         if (initialNote?.isLocked == true && isLocked) {
             // Locked note — PIN verification
@@ -242,9 +301,16 @@ fun NoteEditorScreen(
                 when (selectedTab) {
                     0 -> WriteTab(
                         contentField = contentField,
-                        onContentChange = {
-                            if (it.text.length <= limit) {
-                                contentField = it
+                        onContentChange = { newValue ->
+                            if (newValue.text.length <= limit) {
+                                val processed = handleAutoNumbering(contentField, newValue)
+                                // Push undo snapshot only on meaningful text changes
+                                if (processed.text != contentField.text) {
+                                    undoRedoManager.push(contentField)
+                                    canUndo = undoRedoManager.canUndo
+                                    canRedo = undoRedoManager.canRedo
+                                }
+                                contentField = processed
                             }
                         },
                         reference = reference,
@@ -253,7 +319,23 @@ fun NoteEditorScreen(
                         onTagsChange = { tags = it },
                         charCount = content.length,
                         wordCount = wordCount,
-                        maxChars = limit
+                        maxChars = limit,
+                        canUndo = canUndo,
+                        canRedo = canRedo,
+                        onUndo = {
+                            undoRedoManager.undo(contentField)?.let {
+                                contentField = it
+                                canUndo = undoRedoManager.canUndo
+                                canRedo = undoRedoManager.canRedo
+                            }
+                        },
+                        onRedo = {
+                            undoRedoManager.redo(contentField)?.let {
+                                contentField = it
+                                canUndo = undoRedoManager.canUndo
+                                canRedo = undoRedoManager.canRedo
+                            }
+                        }
                     )
                     1 -> PreviewTab(content = content)
                 }
@@ -272,7 +354,11 @@ private fun WriteTab(
     onTagsChange: (String) -> Unit,
     charCount: Int,
     wordCount: Int,
-    maxChars: Int
+    maxChars: Int,
+    canUndo: Boolean = false,
+    canRedo: Boolean = false,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {}
 ) {
     var isDetailsExpanded by remember { mutableStateOf(false) }
 
@@ -437,14 +523,22 @@ private fun WriteTab(
                 }
 
                 onContentChange(TextFieldValue(newText, TextRange(newCursorPos)))
-            }
+            },
+            canUndo = canUndo,
+            canRedo = canRedo,
+            onUndo = onUndo,
+            onRedo = onRedo
         )
     }
 }
 
 @Composable
 private fun MarkdownToolbar(
-    onInsert: (prefix: String, suffix: String) -> Unit
+    onInsert: (prefix: String, suffix: String) -> Unit,
+    canUndo: Boolean = false,
+    canRedo: Boolean = false,
+    onUndo: () -> Unit = {},
+    onRedo: () -> Unit = {}
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -457,6 +551,16 @@ private fun MarkdownToolbar(
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(0.dp)
         ) {
+            // Undo
+            IconButton(onClick = onUndo, enabled = canUndo, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Undo", tint = if (canUndo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), modifier = Modifier.size(20.dp))
+            }
+            // Redo
+            IconButton(onClick = onRedo, enabled = canRedo, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "Redo", tint = if (canRedo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), modifier = Modifier.size(20.dp))
+            }
+            // Divider
+            VerticalDivider(modifier = Modifier.height(24.dp).padding(horizontal = 2.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
             // Bold
             IconButton(onClick = { onInsert("**", "**") }, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.Default.FormatBold, contentDescription = "Bold", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
@@ -483,7 +587,7 @@ private fun MarkdownToolbar(
             }
             // List
             IconButton(onClick = { onInsert("- ", "") }, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.FormatListBulleted, contentDescription = "List", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.FormatListBulleted, contentDescription = "List", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
             }
             // Link
             IconButton(onClick = { onInsert("[", "](url)") }, modifier = Modifier.size(40.dp)) {
@@ -626,4 +730,67 @@ private fun AnnotatedString.Builder.appendInlineEditor(text: String) {
         append(text[i].toString())
         i++
     }
+}
+
+// ── Auto-numbering helper ────────────────────────────────────────────────────
+
+/**
+ * Detects when the user presses Enter on a list line (bullet or ordered) and
+ * automatically inserts the next list prefix. If the current list item is empty
+ * (user pressed Enter on a blank list item), the prefix is removed instead.
+ */
+private fun handleAutoNumbering(
+    oldValue: TextFieldValue,
+    newValue: TextFieldValue
+): TextFieldValue {
+    val oldText = oldValue.text
+    val newText = newValue.text
+    val cursor = newValue.selection.start
+
+    // Only act when a newline was just inserted (text grew by at least 1 char
+    // and the character before the cursor is '\n').
+    if (newText.length <= oldText.length || cursor < 1 || newText[cursor - 1] != '\n') {
+        return newValue
+    }
+
+    // Find the line the user was on BEFORE the newline was inserted.
+    // That's the line ending just before the new '\n'.
+    val lineStart = oldText.lastIndexOf('\n', cursor - 2) + 1
+    val lineEnd = cursor - 1 // position of the new '\n'
+    if (lineStart > oldText.length || lineEnd > newText.length) return newValue
+    val previousLine = newText.substring(lineStart, lineEnd)
+
+    // Try bullet list match (- item / * item)
+    val bulletMatch = BULLET_LIST_REGEX.find(previousLine)
+    if (bulletMatch != null) {
+        val indent = bulletMatch.groupValues[1]
+        val marker = bulletMatch.groupValues[2]
+        val itemText = bulletMatch.groupValues[3]
+        if (itemText.isBlank()) {
+            // Empty list item → remove the prefix (end the list)
+            val cleanedText = newText.substring(0, lineStart) + newText.substring(cursor)
+            return TextFieldValue(cleanedText, TextRange(lineStart))
+        }
+        val prefix = "$indent$marker "
+        val result = newText.substring(0, cursor) + prefix + newText.substring(cursor)
+        return TextFieldValue(result, TextRange(cursor + prefix.length))
+    }
+
+    // Try ordered list match (1. item / 2. item)
+    val orderedMatch = ORDERED_LIST_REGEX.find(previousLine)
+    if (orderedMatch != null) {
+        val indent = orderedMatch.groupValues[1]
+        val number = orderedMatch.groupValues[2].toIntOrNull() ?: return newValue
+        val itemText = orderedMatch.groupValues[3]
+        if (itemText.isBlank()) {
+            // Empty list item → remove the prefix (end the list)
+            val cleanedText = newText.substring(0, lineStart) + newText.substring(cursor)
+            return TextFieldValue(cleanedText, TextRange(lineStart))
+        }
+        val prefix = "$indent${number + 1}. "
+        val result = newText.substring(0, cursor) + prefix + newText.substring(cursor)
+        return TextFieldValue(result, TextRange(cursor + prefix.length))
+    }
+
+    return newValue
 }

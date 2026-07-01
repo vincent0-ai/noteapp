@@ -179,6 +179,40 @@ interface EchoWithinApiService {
 
     @POST("api/v1/notes/dedup")
     suspend fun dedupNotes(@Query("confirm") confirm: Boolean = true): DedupResponseDto
+
+    // ── Trash ──
+    @GET("api/v1/notes/trash")
+    suspend fun getTrash(
+        @Query("page") page: Int = 1,
+        @Query("per_page") perPage: Int = 50
+    ): TrashResponse
+
+    @POST("api/v1/notes/restore/{noteId}")
+    suspend fun restoreNote(@Path("noteId") noteId: String): GenericResponse
+
+    @POST("api/v1/notes/empty_trash")
+    suspend fun emptyTrash(): GenericResponse
+
+    // ── Folders ──
+    @GET("api/v1/notes/folders")
+    suspend fun getFolders(): FoldersResponse
+
+    @POST("api/v1/notes/move/{noteId}")
+    suspend fun moveNoteToFolder(
+        @Path("noteId") noteId: String,
+        @Body body: Map<String, String?>
+    ): GenericResponse
+
+    // ── Reminders ──
+    @POST("api/v1/notes/{noteId}/reminder")
+    suspend fun setReminder(
+        @Path("noteId") noteId: String,
+        @Body body: ReminderRequest
+    ): GenericResponse
+
+    // ── Shared Note Ping ──
+    @POST("api/share/{shareId}/ping")
+    suspend fun pingCollaborators(@Path("shareId") shareId: String): PingResponse
 }
 
 

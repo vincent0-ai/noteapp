@@ -327,8 +327,44 @@ class NotesRepository(
             if (!hasToken) {
                 dbHelper.deletePhysically(noteId)
             } else {
-                dbHelper.markDeleted(noteId)
+                dbHelper.trashNote(noteId)
             }
+        }
+    }
+
+    suspend fun restoreNote(noteId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            dbHelper.restoreNote(noteId)
+        }
+    }
+
+    fun getTrashedNotes(): List<AppNote> {
+        return dbHelper.getTrashedNotes()
+    }
+
+    suspend fun emptyTrash(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            dbHelper.emptyTrash()
+        }
+    }
+
+    suspend fun permanentDeleteNote(noteId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            dbHelper.deletePhysically(noteId)
+        }
+    }
+
+    fun getFolders(): List<String> {
+        return dbHelper.getAllNotes()
+            .mapNotNull { it.folder }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .sorted()
+    }
+
+    suspend fun pingCollaborators(shareId: String): Result<com.example.echowithin.data.model.PingResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            api.pingCollaborators(shareId)
         }
     }
 
@@ -571,7 +607,11 @@ class NotesRepository(
             pendingOp = pendingOp,
             updateAvailable = update_available,
             sourceNoteId = source_note_id,
-            sourceShareId = source_share_id
+            sourceShareId = source_share_id,
+            folder = folder,
+            isTrashed = is_trashed,
+            trashedAt = trashed_at,
+            reminderAt = reminder_at
         )
     }
 }

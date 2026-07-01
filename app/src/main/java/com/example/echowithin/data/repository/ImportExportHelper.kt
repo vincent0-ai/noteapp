@@ -17,6 +17,35 @@ object NoteImportExportHelper {
         val tags: List<String>
     )
 
+    /**
+     * Sanitizes content imported from external apps (especially Notesnook).
+     * Removes unnecessary backslash escapes that break rendering.
+     */
+    private fun sanitizeImportedContent(content: String): String {
+        var result = content
+        // Remove backslash escapes before characters that don't need escaping in our renderer
+        // Notesnook escapes many characters unnecessarily: \| \. \- \+ \( \) \{ \} \> \< \= \/ \!
+        // Keep valid markdown escapes: \* \_ \` \# \[ \] \~ \$
+        val unnecessaryEscapes = setOf('|', '.', '-', '+', '(', ')', '{', '}', '>', '<', '=', '/', '!', ':', ';', '"', '\'', ',', '?', '@', '^', '&')
+        val sb = StringBuilder()
+        var i = 0
+        while (i < result.length) {
+            if (result[i] == '\\' && i + 1 < result.length && result[i + 1] in unnecessaryEscapes) {
+                // Skip the backslash, keep the character
+                sb.append(result[i + 1])
+                i += 2
+            } else {
+                sb.append(result[i])
+                i++
+            }
+        }
+        result = sb.toString()
+        // Clean up common Notesnook artifacts:
+        // Double-escaped newlines that appear as literal "\n" text
+        result = result.replace("\\n", "\n")
+        return result
+    }
+
     fun exportToMarkdown(note: AppNote): String {
         val sb = StringBuilder()
         sb.append("---\n")
@@ -85,7 +114,7 @@ object NoteImportExportHelper {
                 val content = lines.subList(contentStartIndex, lines.size).joinToString("\n")
                 return ImportedNote(
                     title = title.ifBlank { defaultTitle },
-                    content = content,
+                    content = sanitizeImportedContent(content),
                     reference = reference,
                     tags = tagsList
                 )
@@ -102,7 +131,7 @@ object NoteImportExportHelper {
         }
         return ImportedNote(
             title = title,
-            content = text,
+            content = sanitizeImportedContent(text),
             reference = "",
             tags = emptyList()
         )

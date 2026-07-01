@@ -1,7 +1,9 @@
 package com.example.echowithin.presentation.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -35,7 +39,15 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -115,7 +127,9 @@ fun HomeScreen(
     onDismissOfflinePrivacy: () -> Unit = {},
     // Navigation
     onSearchClick: () -> Unit,
+    onTrashClick: () -> Unit = {},
     onImportNotes: (List<NoteImportExportHelper.ImportedNote>) -> Unit,
+    onBatchDeleteNotes: (List<String>) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Tabs available in offline mode: only Notes and Locked
@@ -131,6 +145,11 @@ fun HomeScreen(
     // Memoize filtered lists to avoid creating new List instances on every recomposition
     val unlockedNotes = remember(notes) { notes.filter { !it.isLocked } }
     val lockedNotes = remember(notes) { notes.filter { it.isLocked } }
+
+    // ── Batch Selection State ──
+    var selectedNoteIds by remember { mutableStateOf(setOf<String>()) }
+    val isSelectionMode = selectedNoteIds.isNotEmpty()
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val importLauncher = rememberLauncherForActivityResult(
@@ -261,99 +280,187 @@ fun HomeScreen(
         )
     }
 
+    // Batch delete confirmation dialog
+    if (showBatchDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("Delete ${selectedNoteIds.size} note${if (selectedNoteIds.size != 1) "s" else ""}?") },
+            text = { Text("This action cannot be undone. The selected notes will be permanently deleted.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showBatchDeleteDialog = false
+                        onBatchDeleteNotes(selectedNoteIds.toList())
+                        selectedNoteIds = emptySet()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) {
+                    Text("Delete", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { EchoWithinTopBarTitle() },
-                actions = {
-                    // Offline mode indicator
-                    if (isOfflineMode) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 8.dp)
+            if (isSelectionMode) {
+                // ── Selection Mode Top Bar ──
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = { selectedNoteIds = emptySet() }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Cancel Selection",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    },
+                    title = {
+                        Text(
+                            text = "${selectedNoteIds.size} selected",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    actions = {
+                        // Select All / Deselect All toggle
+                        val allSelected = selectedNoteIds.size == unlockedNotes.size && unlockedNotes.isNotEmpty()
+                        IconButton(
+                            onClick = {
+                                selectedNoteIds = if (allSelected) emptySet()
+                                else unlockedNotes.map { it.id }.toSet()
+                            }
                         ) {
                             Icon(
-                                imageVector = Icons.Default.CloudOff,
-                                contentDescription = "Offline Mode",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                modifier = Modifier.size(20.dp)
+                                imageVector = Icons.Default.SelectAll,
+                                contentDescription = if (allSelected) "Deselect All" else "Select All",
+                                tint = if (allSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        // Delete selected
+                        IconButton(
+                            onClick = { showBatchDeleteDialog = true }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Selected",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                    ),
+                    windowInsets = WindowInsets(0.dp)
+                )
+            } else {
+                // ── Normal Top Bar ──
+                TopAppBar(
+                    title = { EchoWithinTopBarTitle() },
+                    actions = {
+                        // Offline mode indicator
+                        if (isOfflineMode) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CloudOff,
+                                    contentDescription = "Offline Mode",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Offline",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                    maxLines = 1
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
+                        // "Last synced Xm ago" — only when we actually have a
+                        // timestamp and we're online. Cheap reassurance that
+                        // the device is up to date.
+                        if (lastSyncedAt > 0L && isOnline && !isOfflineMode) {
                             Text(
-                                text = "Offline",
+                                text = "Synced ${formatLastSynced(lastSyncedAt)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 maxLines = 1
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    // "Last synced Xm ago" — only when we actually have a
-                    // timestamp and we're online. Cheap reassurance that
-                    // the device is up to date.
-                    if (lastSyncedAt > 0L && isOnline && !isOfflineMode) {
-                        Text(
-                            text = "Synced ${formatLastSynced(lastSyncedAt)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            maxLines = 1
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    if (isSyncing) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(28.dp).padding(4.dp),
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        IconButton(onClick = onSyncClick) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Sync Notes",
-                                tint = if (isOnline && !isOfflineMode) MaterialTheme.colorScheme.onSurface
-                                       else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                        if (isSyncing) {
+                            CircularProgressIndicator(
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(28.dp).padding(4.dp),
+                                strokeWidth = 2.dp
                             )
+                        } else {
+                            IconButton(onClick = onSyncClick) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Sync Notes",
+                                    tint = if (isOnline && !isOfflineMode) MaterialTheme.colorScheme.onSurface
+                                           else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                            }
                         }
-                    }
-                    
-                    var menuExpanded by remember { mutableStateOf(false) }
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "More Options",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
+                        
+                        var menuExpanded by remember { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "More Options",
+                                    tint = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Trash") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onTrashClick()
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Import Notes") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        importLauncher.launch(arrayOf("text/*", "application/zip", "application/x-zip-compressed"))
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Export All Notes (ZIP)") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        exportLauncher.launch("echowithin_export.zip")
+                                    }
+                                )
+                            }
                         }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Import Notes") },
-                                onClick = {
-                                    menuExpanded = false
-                                    importLauncher.launch(arrayOf("text/*", "application/zip", "application/x-zip-compressed"))
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Export All Notes (ZIP)") },
-                                onClick = {
-                                    menuExpanded = false
-                                    exportLauncher.launch("echowithin_export.zip")
-                                }
-                            )
-                        }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    ),
+                    windowInsets = WindowInsets(0.dp)
                 )
-            )
+            }
         },
         floatingActionButton = {
-            if (activeTab == HomeTab.NOTES) {
+            if (activeTab == HomeTab.NOTES && !isSelectionMode) {
                 FloatingActionButton(
                     onClick = onNewNoteClick,
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -431,7 +538,19 @@ fun HomeScreen(
                     error = error,
                     onNoteClick = onNoteClick,
                     onRetryClick = onRetryClick,
-                    onSyncNoteClick = onSyncNoteClick
+                    onSyncNoteClick = onSyncNoteClick,
+                    selectedNoteIds = selectedNoteIds,
+                    onToggleSelection = { noteId ->
+                        selectedNoteIds = if (noteId in selectedNoteIds) {
+                            selectedNoteIds - noteId
+                        } else {
+                            selectedNoteIds + noteId
+                        }
+                    },
+                    onStartSelection = { noteId ->
+                        selectedNoteIds = setOf(noteId)
+                    },
+                    isSelectionMode = isSelectionMode
                 )
                 HomeTab.LOCKED -> LockedTabContent(
                     lockedNotes = lockedNotes,
@@ -488,8 +607,13 @@ private fun NotesTabContent(
     error: String?,
     onNoteClick: (String) -> Unit,
     onRetryClick: () -> Unit,
-    onSyncNoteClick: (String) -> Unit
+    onSyncNoteClick: (String) -> Unit,
+    selectedNoteIds: Set<String> = emptySet(),
+    onToggleSelection: (String) -> Unit = {},
+    onStartSelection: (String) -> Unit = {},
+    isSelectionMode: Boolean = false
 ) {
+    val haptic = LocalHapticFeedback.current
     when {
         isLoading && notes.isEmpty() -> {
             val brush = shimmerBrush()
@@ -558,8 +682,22 @@ private fun NotesTabContent(
                 items(notes, key = { it.id }, contentType = { "note_card" }) { note ->
                     NoteCard(
                         note = note,
-                        onClick = { onNoteClick(note.id) },
+                        onClick = {
+                            if (isSelectionMode) {
+                                onToggleSelection(note.id)
+                            } else {
+                                onNoteClick(note.id)
+                            }
+                        },
+                        onLongClick = {
+                            if (!isSelectionMode) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                onStartSelection(note.id)
+                            }
+                        },
                         onSyncClick = { onSyncNoteClick(note.id) },
+                        isSelected = note.id in selectedNoteIds,
+                        isSelectionMode = isSelectionMode,
                         modifier = Modifier.animateItem()
                     )
                 }
@@ -1265,8 +1403,9 @@ private fun SharedNoteCard(
                 )
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = stripMarkdown(note.content).lineSequence().firstOrNull()?.trim()?.take(60)
-                            ?: "Untitled",
+                        text = if (note.isLocked) "🔒 Locked Note"
+                               else stripMarkdown(note.content).lineSequence().firstOrNull()?.trim()?.take(60)
+                                   ?: "Untitled",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -1334,10 +1473,11 @@ private fun FirstCharAvatar(
     isLocked: Boolean,
     size: androidx.compose.ui.unit.Dp = 44.dp
 ) {
-    val stripped = stripMarkdown(content).trim()
-    val firstChar = stripped.firstOrNull()?.toString()?.take(1)?.uppercase()
-        ?: titleFallback.trim().firstOrNull()?.toString()?.take(1)?.uppercase()
-        ?: "?"
+    val stripped = if (isLocked) "" else stripMarkdown(content).trim()
+    val firstChar = if (isLocked) "🔒"
+        else stripped.firstOrNull()?.toString()?.take(1)?.uppercase()
+            ?: titleFallback.trim().firstOrNull()?.toString()?.take(1)?.uppercase()
+            ?: "?"
 
     val palette = listOf(
         MaterialTheme.colorScheme.primary,
@@ -1457,12 +1597,15 @@ private fun ShareLinkRow(
 
 // ── Note Card (Notesnook-inspired flat design) ─────────────────────────
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun NoteCard(
     note: AppNote,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     onSyncClick: (() -> Unit)? = null,
+    isSelected: Boolean = false,
+    isSelectionMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val strippedContent = remember(note.content) { stripMarkdown(note.content) }
@@ -1475,155 +1618,183 @@ fun NoteCard(
     }
     val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
+    val selectionBgColor = if (isSelected) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+    } else {
+        Color.Transparent
+    }
+
     Column(modifier = modifier) {
         // Flat note item — no Card, just content + divider (Notesnook style)
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onClick)
+                .background(selectionBgColor)
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = onLongClick
+                )
                 .padding(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalAlignment = Alignment.Top
         ) {
-            // Title row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            // Selection checkbox
+            if (isSelectionMode) {
+                Checkbox(
+                    checked = isSelected,
+                    onCheckedChange = { onClick() },
+                    modifier = Modifier.padding(end = 8.dp, top = 2.dp),
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary,
+                        uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    )
+                )
+            }
+
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
+                // Title row
                 Row(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (note.isPinned) {
-                        Icon(
-                            imageVector = Icons.Default.PushPin,
-                            contentDescription = "Pinned",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .size(18.dp)
-                                .padding(end = 4.dp)
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (note.isPinned) {
+                            Icon(
+                                imageVector = Icons.Default.PushPin,
+                                contentDescription = "Pinned",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .padding(end = 4.dp)
+                            )
+                        }
+                        Text(
+                            text = previewTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+                    if (!note.isSynced) {
+                        val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
+                        Text(
+                            text = badgeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+
+                // Update available banner
+                if (note.updateAvailable) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSyncClick?.invoke() }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(text = "⚠️", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                text = "Update Available",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Sync Now",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Sync",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Body preview
+                if (previewBody.isNotBlank()) {
                     Text(
-                        text = previewTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 1,
+                        text = previewBody.take(140),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                if (!note.isSynced) {
-                    val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
+
+                // Tags as inline text (Notesnook-style: plain #tag, no chips)
+                if (note.tags.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        note.tags.take(5).forEach { tag ->
+                            Text(
+                                text = "#$tag",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (note.tags.size > 5) {
+                            Text(
+                                text = "+${note.tags.size - 5}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Metadata row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (!note.reference.isNullOrBlank()) {
+                        Text(
+                            text = "Ref: ${note.reference}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                     Text(
-                        text = badgeText,
+                        text = relativeTime,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary,
-                        modifier = Modifier.padding(start = 8.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                 }
-            }
-
-            // Update available banner
-            if (note.updateAvailable) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSyncClick?.invoke() }
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(text = "⚠️", style = MaterialTheme.typography.bodySmall)
-                        Text(
-                            text = "Update Available",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "Sync Now",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = "Sync",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(14.dp)
-                        )
-                    }
-                }
-            }
-
-            // Body preview
-            if (previewBody.isNotBlank()) {
-                Text(
-                    text = previewBody.take(140),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            // Tags as inline text (Notesnook-style: plain #tag, no chips)
-            if (note.tags.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(top = 2.dp)
-                ) {
-                    note.tags.take(5).forEach { tag ->
-                        Text(
-                            text = "#$tag",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    if (note.tags.size > 5) {
-                        Text(
-                            text = "+${note.tags.size - 5}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            // Metadata row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (!note.reference.isNullOrBlank()) {
-                    Text(
-                        text = "Ref: ${note.reference}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
-                    )
-                } else {
-                    Spacer(modifier = Modifier.weight(1f))
-                }
-                Text(
-                    text = relativeTime,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
             }
         }
 

@@ -22,7 +22,8 @@ data class LoginResponse(
 data class CreateNoteRequest(
     val content: String,
     val reference: String = "",
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
+    val folder: String? = null
 )
 
 data class CreateNoteResponse(
@@ -42,7 +43,11 @@ data class NoteDto(
     val source_note_id: String? = null,
     val source_share_id: String? = null,
     val created_at: String? = null,
-    val updated_at: String? = null
+    val updated_at: String? = null,
+    val folder: String? = null,
+    val is_trashed: Boolean = false,
+    val trashed_at: String? = null,
+    val reminder_at: String? = null
 )
 
 data class PaginationDto(
@@ -76,7 +81,11 @@ data class AppNote(
     val pendingOp: String = "none",
     val updateAvailable: Boolean = false,
     val sourceNoteId: String? = null,
-    val sourceShareId: String? = null
+    val sourceShareId: String? = null,
+    val folder: String? = null,
+    val isTrashed: Boolean = false,
+    val trashedAt: String? = null,
+    val reminderAt: String? = null
 )
 
 data class ProfileResponse(
@@ -336,4 +345,28 @@ data class DedupGroupDto(
     val kept_id: String = "",
     val removed_ids: List<String> = emptyList(),
     val removed_count: Int = 0
+)
+
+// Trash DTOs
+data class TrashResponse(
+    val notes: List<NoteDto> = emptyList(),
+    val count: Int = 0
+)
+
+// Folders DTOs
+data class FoldersResponse(
+    val folders: List<String> = emptyList()
+)
+
+// Reminder DTOs
+data class ReminderRequest(
+    val reminder_at: String? = null
+)
+
+// Ping DTOs (shared note collaborator ping)
+data class PingResponse(
+    val success: Boolean = false,
+    val pinged_count: Int = 0,
+    val message: String? = null,
+    val error: String? = null
 )

@@ -22,10 +22,13 @@ import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import com.example.echowithin.data.network.SessionManager
+import com.example.echowithin.data.local.PreferencesManager
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.DeleteSweep
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +65,8 @@ fun SettingsScreen(
                 title = { EchoWithinTopBarTitle() },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets(0.dp)
             )
         },
         containerColor = MaterialTheme.colorScheme.background
@@ -228,6 +232,114 @@ fun SettingsScreen(
                 )
             }
 
+            // Notes Preferences section
+            SettingsSectionHeader(title = "Notes Preferences")
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                var showSortDialog by remember { mutableStateOf(false) }
+                var currentSort by remember { mutableStateOf(PreferencesManager.sortOrder) }
+                var autoPurge by remember { mutableStateOf(PreferencesManager.autoPurgeTrash) }
+
+                Column {
+                    SettingsRowItem(
+                        icon = Icons.AutoMirrored.Filled.Sort,
+                        title = "Default Sort Order",
+                        subtitle = "Current: ${sortDisplayName(currentSort)}",
+                        onClick = { showSortDialog = true }
+                    )
+                    HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = "Auto Purge",
+                            tint = BrandOrange,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Auto-Purge Trash",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "Delete trashed notes after 30 days",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoPurge,
+                            onCheckedChange = {
+                                autoPurge = it
+                                PreferencesManager.autoPurgeTrash = it
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = BrandOrange,
+                                checkedTrackColor = BrandOrange.copy(alpha = 0.3f)
+                            )
+                        )
+                    }
+                }
+
+                if (showSortDialog) {
+                    val sortOptions = listOf(
+                        "updated_desc" to "Last Modified (Newest)",
+                        "updated_asc" to "Last Modified (Oldest)",
+                        "title_asc" to "Title (A-Z)",
+                        "title_desc" to "Title (Z-A)",
+                        "created_desc" to "Created (Newest)",
+                        "created_asc" to "Created (Oldest)"
+                    )
+                    AlertDialog(
+                        onDismissRequest = { showSortDialog = false },
+                        title = { Text("Default Sort Order") },
+                        text = {
+                            Column {
+                                sortOptions.forEach { (key, label) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                currentSort = key
+                                                PreferencesManager.sortOrder = key
+                                                showSortDialog = false
+                                            }
+                                            .padding(vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = currentSort == key,
+                                            onClick = {
+                                                currentSort = key
+                                                PreferencesManager.sortOrder = key
+                                                showSortDialog = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(label, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showSortDialog = false }) { Text("Close") }
+                        }
+                    )
+                }
+            }
+
             // About EchoWithin section
             SettingsSectionHeader(title = "About EchoWithin")
 
@@ -325,6 +437,16 @@ fun SettingsScreen(
             }
         }
     }
+}
+
+private fun sortDisplayName(key: String): String = when (key) {
+    "updated_desc" -> "Last Modified (Newest)"
+    "updated_asc" -> "Last Modified (Oldest)"
+    "title_asc" -> "Title (A-Z)"
+    "title_desc" -> "Title (Z-A)"
+    "created_desc" -> "Created (Newest)"
+    "created_asc" -> "Created (Oldest)"
+    else -> key.replaceFirstChar { it.uppercase() }
 }
 
 @Composable

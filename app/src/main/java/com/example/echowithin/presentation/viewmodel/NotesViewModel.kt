@@ -44,25 +44,24 @@ data class NotesUiState(
     val badgeCounts: BadgeCountsDto = BadgeCountsDto(0, 0),
     val updateInfo: com.example.echowithin.data.network.UpdateInfo? = null,
     val downloadProgress: Float? = null,
-    // Number of notes waiting to be pushed to the server (used by the
-    // offline banner to tell the user "N changes will sync when you
-    // reconnect"). Recomputed from the local DB on every load.
     val pendingSyncCount: Int = 0,
-    // Last successful sync timestamp (epoch millis). Powers the small
-    // "Synced 5m ago" label in the top app bar.
     val lastSyncedAt: Long = 0L,
-    // True while a "mark all as read" round-trip is in flight. Lets the
-    // Activity tab show a spinner instead of doing nothing on tap.
     val markingAllRead: Boolean = false,
-    // Last-marked count, used for the "Cleared N items" toast. Cleared
-    // by the UI once the toast has been shown.
-    val lastMarkedReadCount: Int = 0
+    val lastMarkedReadCount: Int = 0,
+    // ── New: Trash, Sort, Filter, Folders ──
+    val trashedNotes: List<AppNote> = emptyList(),
+    val sortOrder: String = "date_modified",
+    val filterTag: String? = null,
+    val filterFolder: String? = null,
+    val folders: List<String> = emptyList()
 )
 
 class NotesViewModel(
     private val repository: NotesRepository
 ) : ViewModel() {
-    var uiState by mutableStateOf(NotesUiState())
+    var uiState by mutableStateOf(NotesUiState(
+        sortOrder = com.example.echowithin.data.local.PreferencesManager.sortOrder
+    ))
         private set
 
     /**
@@ -626,6 +625,8 @@ class NotesViewModel(
             repository.createNote(content = content, reference = reference, tags = tags)
                 .onSuccess { id ->
                     loadNotes()
+                    // Trigger sync to push new note to server immediately
+                    triggerAutoSync()
                     onDone(id)
                 }
                 .onFailure {
@@ -640,6 +641,7 @@ class NotesViewModel(
             repository.editNote(noteId = noteId, content = content, reference = reference, tags = tags)
                 .onSuccess { _ ->
                     loadNotes()
+                    triggerAutoSync()
                     onDone()
                 }
                 .onFailure {
@@ -659,6 +661,20 @@ class NotesViewModel(
                 .onFailure {
                     uiState = uiState.copy(isLoading = false, error = it.message ?: "Could not delete note")
                 }
+        }
+    }
+
+    fun deleteNotes(noteIds: List<String>, onDone: (Int) -> Unit) {
+        uiState = uiState.copy(isLoading = true, error = null)
+        viewModelScope.launch {
+            var deletedCount = 0
+            for (noteId in noteIds) {
+                repository.deleteNote(noteId)
+                    .onSuccess { deletedCount++ }
+            }
+            loadNotes()
+            uiState = uiState.copy(isLoading = false)
+            onDone(deletedCount)
         }
     }
 
@@ -789,6 +805,135 @@ class NotesViewModel(
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return NotesViewModel(NotesRepository()) as T
             }
+        }
+    }
+
+    // ── Sync trigger helper (fixes sync bug) ──
+    // Respects the 5-minute throttle for automatic mode.
+    // Manual mode: does nothing — user must pull-to-refresh or use sync button.
+    private fun triggerAutoSync() {
+        val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() && com.example.echowithin.data.network.SessionManager.token != "null"
+        if (!hasToken) return
+        if (com.example.echowithin.data.network.SessionManager.syncMode != "automatic") return
+
+        val now = System.currentTimeMillis()
+        if (now - lastAutoSyncAt >= autoSyncIntervalMs) {
+            lastAutoSyncAt = now
+            syncNotes()
+        }
+        // Otherwise pending notes will be picked up by the next scheduled
+        // auto-sync or on the next connectivity-change event.
+    }
+
+    // ── Sort & Filter ──
+    private fun sortAndFilterNotes(notes: List<AppNote>): List<AppNote> {
+        val pinned = notes.filter { it.isPinned }
+        val unpinned = notes.filter { !it.isPinned }
+
+        val sortedUnpinned = when (uiState.sortOrder) {
+            "date_created" -> unpinned.sortedByDescending { it.updatedAt }
+            "title_az" -> unpinned.sortedBy { it.title.lowercase() }
+            "title_za" -> unpinned.sortedByDescending { it.title.lowercase() }
+            else -> unpinned // date_modified is default DB order
+        }
+
+        var result = pinned + sortedUnpinned
+
+        uiState.filterTag?.let { tag ->
+            result = result.filter { note -> note.tags.any { it.equals(tag, ignoreCase = true) } }
+        }
+        uiState.filterFolder?.let { folder ->
+            result = result.filter { it.folder == folder }
+        }
+
+        return result
+    }
+
+    fun setSortOrder(order: String) {
+        com.example.echowithin.data.local.PreferencesManager.sortOrder = order
+        uiState = uiState.copy(sortOrder = order)
+        // Re-sort current notes
+        val sorted = sortAndFilterNotes(repository.getLocalNotes())
+        uiState = uiState.copy(notes = sorted)
+    }
+
+    fun setFilterTag(tag: String?) {
+        uiState = uiState.copy(filterTag = tag)
+        val sorted = sortAndFilterNotes(repository.getLocalNotes())
+        uiState = uiState.copy(notes = sorted)
+    }
+
+    fun setFilterFolder(folder: String?) {
+        uiState = uiState.copy(filterFolder = folder)
+        val sorted = sortAndFilterNotes(repository.getLocalNotes())
+        uiState = uiState.copy(notes = sorted)
+    }
+
+    fun loadFolders() {
+        viewModelScope.launch {
+            val folders = withContext(Dispatchers.IO) { repository.getFolders() }
+            uiState = uiState.copy(folders = folders)
+        }
+    }
+
+    // ── Trash ──
+    fun loadTrash() {
+        viewModelScope.launch {
+            val trashed = withContext(Dispatchers.IO) { repository.getTrashedNotes() }
+            uiState = uiState.copy(trashedNotes = trashed)
+        }
+    }
+
+    fun restoreNote(noteId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            repository.restoreNote(noteId)
+                .onSuccess {
+                    loadNotes()
+                    loadTrash()
+                    onDone()
+                }
+                .onFailure {
+                    uiState = uiState.copy(error = it.message ?: "Could not restore note")
+                }
+        }
+    }
+
+    fun emptyTrash(onDone: () -> Unit) {
+        viewModelScope.launch {
+            repository.emptyTrash()
+                .onSuccess {
+                    loadTrash()
+                    onDone()
+                }
+                .onFailure {
+                    uiState = uiState.copy(error = it.message ?: "Could not empty trash")
+                }
+        }
+    }
+
+    fun permanentDeleteNote(noteId: String, onDone: () -> Unit) {
+        viewModelScope.launch {
+            repository.permanentDeleteNote(noteId)
+                .onSuccess {
+                    loadTrash()
+                    onDone()
+                }
+                .onFailure {
+                    uiState = uiState.copy(error = it.message ?: "Could not permanently delete note")
+                }
+        }
+    }
+
+    // ── Ping ──
+    fun pingCollaborators(shareId: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch {
+            repository.pingCollaborators(shareId)
+                .onSuccess { response ->
+                    onResult(response.success, response.message ?: "Pinged ${response.pinged_count} collaborator(s)")
+                }
+                .onFailure {
+                    onResult(false, it.message ?: "Failed to ping collaborators")
+                }
         }
     }
 }

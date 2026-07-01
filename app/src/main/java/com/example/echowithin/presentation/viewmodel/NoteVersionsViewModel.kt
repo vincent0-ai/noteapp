@@ -24,6 +24,12 @@ class NoteVersionsViewModel(
     var uiState by mutableStateOf(NoteVersionsUiState())
         private set
 
+    // Access to notes API for refreshing the local note after restore
+    private val notesApi = com.example.echowithin.data.network.ApiClient.apiService
+    private val dbHelper = com.example.echowithin.data.local.NoteDatabaseHelper(
+        com.example.echowithin.EchoWithinApplication.instance
+    )
+
     fun load(noteId: String) {
         uiState = uiState.copy(isLoading = true, error = null, noteId = noteId, restoreSuccess = false)
         viewModelScope.launch {
@@ -40,6 +46,32 @@ class NoteVersionsViewModel(
         viewModelScope.launch {
             repository.restoreVersion(noteId, versionId)
                 .onSuccess {
+                    // Refresh the local note from the server so the user sees
+                    // the restored content when navigating back
+                    try {
+                        val freshNote = notesApi.getNoteById(noteId)
+                        val titleCandidate = freshNote.content.lineSequence().firstOrNull()?.trim().orEmpty()
+                        val title = if (titleCandidate.isBlank()) "Untitled" else titleCandidate.take(60)
+                        val appNote = com.example.echowithin.data.model.AppNote(
+                            id = freshNote.id,
+                            title = title,
+                            content = freshNote.content,
+                            reference = freshNote.reference.orEmpty(),
+                            tags = freshNote.tags,
+                            updatedAt = freshNote.updated_at ?: freshNote.created_at ?: "",
+                            isLocked = freshNote.is_locked,
+                            isPinned = freshNote.is_pinned,
+                            isSynced = true,
+                            pendingOp = "none",
+                            updateAvailable = freshNote.update_available,
+                            sourceNoteId = freshNote.source_note_id,
+                            sourceShareId = freshNote.source_share_id,
+                            folder = freshNote.folder
+                        )
+                        dbHelper.saveNote(appNote, isSynced = true, pendingOp = "none")
+                    } catch (_: Exception) {
+                        // Sync failure is non-fatal; the note will refresh on next sync
+                    }
                     uiState = uiState.copy(restoreSuccess = true)
                     load(noteId)
                 }
