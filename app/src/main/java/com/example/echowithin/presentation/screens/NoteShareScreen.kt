@@ -30,7 +30,10 @@ import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.ContentCopy
 import com.example.echowithin.data.network.SessionManager
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.window.Dialog
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,6 +60,7 @@ fun NoteShareScreen(
     var themeDropdownExpanded by remember { mutableStateOf(false) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     var photoUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var audioUri by remember { mutableStateOf<android.net.Uri?>(null) }
 
@@ -259,10 +263,15 @@ fun NoteShareScreen(
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
+                                // Copy Link
                                 Button(
-                                    onClick = { onOpenShareLink(share.share_id) },
+                                    onClick = {
+                                        val url = "https://echowithin.xyz/share/note/${share.share_id}"
+                                        clipboardManager.setText(AnnotatedString(url))
+                                        android.widget.Toast.makeText(context, "Link copied", android.widget.Toast.LENGTH_SHORT).show()
+                                    },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(
@@ -270,25 +279,49 @@ fun NoteShareScreen(
                                         contentColor = Color.White
                                     )
                                 ) {
-                                    Icon(Icons.Default.OpenInBrowser, contentDescription = "Open Link", modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Open Link", style = MaterialTheme.typography.bodySmall)
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy Link", modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Copy", maxLines = 1, style = MaterialTheme.typography.labelSmall)
                                 }
 
+                                // Share via other apps
                                 Button(
-                                    onClick = { onSelectShare(share.share_id) },
+                                    onClick = {
+                                        val url = "https://echowithin.xyz/share/note/${share.share_id}"
+                                        val sendIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                            type = "text/plain"
+                                            putExtra(android.content.Intent.EXTRA_TEXT, url)
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(sendIntent, "Share link"))
+                                    },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(8.dp),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (uiState.selectedShareId == share.share_id) BrandOrange else MaterialTheme.colorScheme.surfaceVariant,
-                                        contentColor = if (uiState.selectedShareId == share.share_id) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                                        containerColor = BrandOrange,
+                                        contentColor = Color.White
                                     )
                                 ) {
-                                    Icon(Icons.Default.Launch, contentDescription = "Select", modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Select", style = MaterialTheme.typography.bodySmall)
+                                    Icon(Icons.Default.Share, contentDescription = "Share Link", modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Share", maxLines = 1, style = MaterialTheme.typography.labelSmall)
                                 }
 
+                                // Open in browser
+                                Button(
+                                    onClick = { onOpenShareLink(share.share_id) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                ) {
+                                    Icon(Icons.Default.OpenInBrowser, contentDescription = "Open Link", modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Open", maxLines = 1, style = MaterialTheme.typography.labelSmall)
+                                }
+
+                                // Revoke
                                 Button(
                                     onClick = { onRevokeShare(share.share_id) },
                                     modifier = Modifier.weight(1f),
@@ -298,9 +331,9 @@ fun NoteShareScreen(
                                         contentColor = MaterialTheme.colorScheme.onErrorContainer
                                     )
                                 ) {
-                                    Icon(Icons.Default.Delete, contentDescription = "Revoke", modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Revoke", style = MaterialTheme.typography.bodySmall)
+                                    Icon(Icons.Default.Delete, contentDescription = "Revoke", modifier = Modifier.size(14.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Revoke", maxLines = 1, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }

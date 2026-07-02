@@ -2,6 +2,7 @@ package com.example.echowithin.presentation.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
@@ -577,77 +578,68 @@ modifier = Modifier
                 // here makes the protection affordance discoverable and
                 // also makes the lock icon change (open/closed) immediately
                 // visible as the user toggles it.
+                // ── Bottom Action Bar ──
+                // Clean icon toolbar matching the app's Material 3 design
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(androidx.compose.ui.Alignment.BottomCenter),
                     color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 8.dp,
-                    tonalElevation = 4.dp
+                    tonalElevation = 2.dp,
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
                 ) {
-                    androidx.compose.foundation.layout.Row(
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        androidx.compose.material3.FilledTonalButton(
-                            onClick = onEdit,
-                            modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(
-                                containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                                contentColor = MaterialTheme.colorScheme.primary
-                            )
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
-                            Text("Edit", fontWeight = FontWeight.SemiBold, fontSize = 10.sp, maxLines = 1, softWrap = false)
-                        }
-                        androidx.compose.material3.OutlinedButton(
+                        // Edit
+                        ActionBarItem(
+                            icon = Icons.Default.Edit,
+                            label = "Edit",
+                            tint = com.example.echowithin.ui.theme.BrandOrange,
+                            onClick = onEdit
+                        )
+                        // Copy
+                        ActionBarItem(
+                            icon = Icons.Default.ContentCopy,
+                            label = "Copy",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = {
                                 val rawText = noteState?.content.orEmpty()
                                 if (rawText.isNotBlank()) {
                                     clipboardManager.setText(AnnotatedString(rawText))
                                     android.widget.Toast.makeText(context, "Note copied", android.widget.Toast.LENGTH_SHORT).show()
                                 }
-                            },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(12.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
-                            Text("Copy", fontSize = 10.sp, maxLines = 1, softWrap = false)
-                        }
-                        androidx.compose.material3.OutlinedButton(
+                            }
+                        )
+                        // Share
+                        ActionBarItem(
+                            icon = Icons.Default.Share,
+                            label = "Share",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = {
                                 if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
                                     android.widget.Toast.makeText(context, "Sign in to share notes", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     onShare()
                                 }
-                            },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(12.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
-                            Text("Share", fontSize = 10.sp, maxLines = 1, softWrap = false)
-                        }
-                        androidx.compose.material3.OutlinedButton(
+                            }
+                        )
+                        // Lock
+                        ActionBarItem(
+                            icon = if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
+                            label = if (noteState?.isLocked == true) "Locked" else "Lock",
+                            tint = if (noteState?.isLocked == true) com.example.echowithin.ui.theme.BrandOrange
+                                   else MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = {
                                 val isGuest = com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()
                                 val isFree = com.example.echowithin.data.network.SessionManager.accountTier == "free"
                                 if (isGuest || isFree) {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        "Upgrade to Premium to lock notes!",
-                                        android.widget.Toast.LENGTH_SHORT
-                                    ).show()
+                                    android.widget.Toast.makeText(context, "Upgrade to Premium to lock notes!", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     onToggleLock { newLocked ->
                                         noteState = noteState?.copy(isLocked = newLocked)
@@ -658,66 +650,28 @@ modifier = Modifier
                                         ).show()
                                     }
                                 }
-                            },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                                contentColor = if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (noteState?.isLocked == true) MaterialTheme.colorScheme.secondary
-                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                            )
-                        ) {
-                            Icon(
-                                if (noteState?.isLocked == true) Icons.Default.Lock else Icons.Default.LockOpen,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                if (noteState?.isLocked == true) "Locked" else "Lock",
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 10.sp,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        androidx.compose.material3.OutlinedButton(
+                            }
+                        )
+                        // History
+                        ActionBarItem(
+                            icon = Icons.Default.History,
+                            label = "History",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             onClick = {
                                 if (com.example.echowithin.data.network.SessionManager.token.isNullOrBlank()) {
                                     android.widget.Toast.makeText(context, "Sign in to view versions", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     onVersions()
                                 }
-                            },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
-                        ) {
-                            Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(12.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
-                            Text("History", fontSize = 10.sp, maxLines = 1, softWrap = false)
-                        }
-                        androidx.compose.material3.OutlinedButton(
-                            onClick = { showDeleteDialog = true },
-                            modifier = Modifier.weight(1f),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-                            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(
-                                contentColor = ErrorRed
-                            ),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                ErrorRed.copy(alpha = 0.5f)
-                            )
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(12.dp))
-                            androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(2.dp))
-                            Text("Delete", fontSize = 10.sp, maxLines = 1, softWrap = false)
-                        }
+                            }
+                        )
+                        // Delete
+                        ActionBarItem(
+                            icon = Icons.Default.Delete,
+                            label = "Delete",
+                            tint = ErrorRed,
+                            onClick = { showDeleteDialog = true }
+                        )
                     }
                 }
             }  // close outer Box
@@ -1104,5 +1058,39 @@ private fun AnnotatedString.Builder.appendInlineFormatting(
         // Regular character
         append(text[i].toString())
         i++
+    }
+}
+
+/**
+ * Compact action bar item: icon + label stacked vertically.
+ * Used in the NoteDetailScreen bottom toolbar.
+ */
+@Composable
+private fun ActionBarItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    tint: Color,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = tint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            text = label,
+            fontSize = 10.sp,
+            color = tint,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
+        )
     }
 }

@@ -190,7 +190,11 @@ fun AppNavGraph(
     NavHost(
         navController = navController,
         startDestination = startDest,
-        modifier = Modifier.padding(innerPadding)
+        modifier = Modifier.padding(innerPadding),
+        enterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)) },
+        exitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) },
+        popEnterTransition = { androidx.compose.animation.fadeIn(animationSpec = androidx.compose.animation.core.tween(200)) },
+        popExitTransition = { androidx.compose.animation.fadeOut(animationSpec = androidx.compose.animation.core.tween(200)) }
     ) {
         composable(AppRoute.Welcome) {
             WelcomeScreen(
