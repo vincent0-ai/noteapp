@@ -390,7 +390,11 @@ fun AppNavGraph(
                         android.widget.Toast.makeText(context, "Deleted $count note${if (count != 1) "s" else ""}", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 },
-                onTrashClick = { navController.navigate(AppRoute.Trash) }
+                onTrashClick = { navController.navigate(AppRoute.Trash) },
+                // Folders
+                folders = notesViewModel.uiState.folders,
+                filterFolder = notesViewModel.uiState.filterFolder,
+                onFilterFolder = { notesViewModel.setFilterFolder(it) }
             )
         }
 

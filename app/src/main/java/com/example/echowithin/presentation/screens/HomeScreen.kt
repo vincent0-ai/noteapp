@@ -133,6 +133,10 @@ fun HomeScreen(
     onTrashClick: () -> Unit = {},
     onImportNotes: (List<NoteImportExportHelper.ImportedNote>) -> Unit,
     onBatchDeleteNotes: (List<String>) -> Unit,
+    // Folders
+    folders: List<String> = emptyList(),
+    filterFolder: String? = null,
+    onFilterFolder: (String?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Tabs available in offline mode: only Notes and Locked
@@ -535,26 +539,63 @@ fun HomeScreen(
 
             // Tab Content
             when (activeTab) {
-                HomeTab.NOTES -> NotesTabContent(
-                    notes = unlockedNotes,
-                    isLoading = isLoading,
-                    error = error,
-                    onNoteClick = onNoteClick,
-                    onRetryClick = onRetryClick,
-                    onSyncNoteClick = onSyncNoteClick,
-                    selectedNoteIds = selectedNoteIds,
-                    onToggleSelection = { noteId ->
-                        selectedNoteIds = if (noteId in selectedNoteIds) {
-                            selectedNoteIds - noteId
-                        } else {
-                            selectedNoteIds + noteId
+                HomeTab.NOTES -> {
+                    Column {
+                        // Folder filter chips
+                        if (folders.isNotEmpty()) {
+                            androidx.compose.foundation.lazy.LazyRow(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                item {
+                                    FilterChip(
+                                        selected = filterFolder == null,
+                                        onClick = { onFilterFolder(null) },
+                                        label = { Text("All") },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = BrandOrange,
+                                            selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                                        )
+                                    )
+                                }
+                                items(folders.size) { index ->
+                                    val folder = folders[index]
+                                    FilterChip(
+                                        selected = filterFolder == folder,
+                                        onClick = { onFilterFolder(if (filterFolder == folder) null else folder) },
+                                        label = { Text(folder) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = BrandOrange,
+                                            selectedLabelColor = androidx.compose.ui.graphics.Color.White
+                                        )
+                                    )
+                                }
+                            }
                         }
-                    },
-                    onStartSelection = { noteId ->
-                        selectedNoteIds = setOf(noteId)
-                    },
-                    isSelectionMode = isSelectionMode
-                )
+                        NotesTabContent(
+                            notes = unlockedNotes,
+                            isLoading = isLoading,
+                            error = error,
+                            onNoteClick = onNoteClick,
+                            onRetryClick = onRetryClick,
+                            onSyncNoteClick = onSyncNoteClick,
+                            selectedNoteIds = selectedNoteIds,
+                            onToggleSelection = { noteId ->
+                                selectedNoteIds = if (noteId in selectedNoteIds) {
+                                    selectedNoteIds - noteId
+                                } else {
+                                    selectedNoteIds + noteId
+                                }
+                            },
+                            onStartSelection = { noteId ->
+                                selectedNoteIds = setOf(noteId)
+                            },
+                            isSelectionMode = isSelectionMode
+                        )
+                    }
+                }
                 HomeTab.LOCKED -> LockedTabContent(
                     lockedNotes = lockedNotes,
                     hasPin = hasPin,

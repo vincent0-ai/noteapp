@@ -348,6 +348,7 @@ class NotesViewModel(
                 loadProposals()
                 loadActiveShares()
                 loadNotifications()
+                loadFolders()
             }
         }
     }
