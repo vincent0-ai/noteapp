@@ -47,6 +47,12 @@ class AppLockViewModel(
     }
 
     fun verify(pin: String) {
+        // Biometric bypass: if the biometric prompt already succeeded on-device,
+        // skip the server PIN verification and directly unlock.
+        if (pin == "__biometric__") {
+            uiState = uiState.copy(isLocked = false, error = null)
+            return
+        }
         uiState = uiState.copy(isLoading = true, error = null)
         viewModelScope.launch {
             repository.verifyLock(pin)
@@ -68,7 +74,7 @@ class AppLockViewModel(
         }
     }
 
-    /** Clear the error message — called from the screen when the user
+    /** Clear the error message - called from the screen when the user
      *  starts typing a new PIN so the red error text disappears. */
     fun clearError() {
         if (uiState.error != null) {

@@ -35,6 +35,7 @@ import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.components.ProposalReviewDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Refresh
@@ -57,6 +58,7 @@ import com.example.echowithin.data.repository.NoteImportExportHelper
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.foundation.background
 import com.example.echowithin.ui.theme.ErrorRed
+import com.example.echowithin.ui.theme.BrandOrange
 
 // ── Pre-compiled regex patterns for stripMarkdown (performance fix) ──
 private val REGEX_HEADING = Regex("(?m)^#+\\s+")
@@ -93,6 +95,7 @@ fun HomeScreen(
     lockLoading: Boolean,
     onVerifyPin: (String) -> Unit,
     onSetupPin: (String) -> Unit,
+    onBiometricUnlock: () -> Unit = {},
     // Proposals (Activity tab)
     proposals: List<ProposalDto>,
     proposalsLoading: Boolean,
@@ -561,7 +564,8 @@ fun HomeScreen(
                     onVerifyPin = onVerifyPin,
                     onSetupPin = onSetupPin,
                     onNoteClick = onNoteClick,
-                    onSyncNoteClick = onSyncNoteClick
+                    onSyncNoteClick = onSyncNoteClick,
+                    onBiometricUnlock = onBiometricUnlock
                 )
                 HomeTab.ACTIVITY -> if (HomeTab.ACTIVITY in availableTabs) ActivityTabContent(
                     proposals = proposals,
@@ -718,7 +722,8 @@ private fun LockedTabContent(
     onVerifyPin: (String) -> Unit,
     onSetupPin: (String) -> Unit,
     onNoteClick: (String) -> Unit,
-    onSyncNoteClick: (String) -> Unit
+    onSyncNoteClick: (String) -> Unit,
+    onBiometricUnlock: () -> Unit = {}
 ) {
     if (!hasPin) {
         // No PIN set up — check if we're offline with a previously configured PIN
@@ -910,6 +915,23 @@ private fun LockedTabContent(
                     modifier = Modifier.width(200.dp)
                 ) {
                     Text("Unlock", fontWeight = FontWeight.Bold)
+                }
+                if (com.example.echowithin.data.local.PreferencesManager.biometricEnabled) {
+                    OutlinedButton(
+                        onClick = onBiometricUnlock,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.width(200.dp),
+                        border = BorderStroke(1.dp, BrandOrange.copy(alpha = 0.5f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fingerprint,
+                            contentDescription = "Biometric",
+                            tint = BrandOrange,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Use Fingerprint", color = BrandOrange, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

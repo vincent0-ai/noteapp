@@ -310,6 +310,21 @@ fun AppNavGraph(
                 lockLoading = appLockViewModel.uiState.isLoading,
                 onVerifyPin = { appLockViewModel.verify(it) },
                 onSetupPin = { appLockViewModel.setup(it) },
+                onBiometricUnlock = {
+                    val activity = context as? androidx.fragment.app.FragmentActivity
+                    if (activity != null) {
+                        com.example.echowithin.data.local.BiometricHelper.authenticate(
+                            activity = activity,
+                            onSuccess = {
+                                // Biometric success = bypass PIN verification, directly unlock
+                                appLockViewModel.verify("__biometric__")
+                            },
+                            onError = { msg ->
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
+                },
                 // Proposals
                 proposals = notesViewModel.uiState.proposals,
                 proposalsLoading = notesViewModel.uiState.proposalsLoading,

@@ -29,6 +29,7 @@ import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.Fingerprint
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -215,7 +216,7 @@ fun SettingsScreen(
                 )
             }
 
-            // App Features section (only App Security Lock)
+            // App Features section
             SettingsSectionHeader(title = "App Features")
 
             Card(
@@ -224,12 +225,61 @@ fun SettingsScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
             ) {
-                SettingsRowItem(
-                    icon = Icons.Default.Lock,
-                    title = "App Security Lock",
-                    subtitle = "Protect your notes with a secure PIN",
-                    onClick = onAppLockClick
-                )
+                val biometricContext = androidx.compose.ui.platform.LocalContext.current
+                val canUseBiometric = remember {
+                    com.example.echowithin.data.local.BiometricHelper.canAuthenticate(biometricContext)
+                }
+                var biometricEnabled by remember { mutableStateOf(PreferencesManager.biometricEnabled) }
+
+                Column {
+                    SettingsRowItem(
+                        icon = Icons.Default.Lock,
+                        title = "App Security Lock",
+                        subtitle = "Protect your notes with a secure PIN",
+                        onClick = onAppLockClick
+                    )
+                    if (canUseBiometric) {
+                        HorizontalDivider(thickness = 0.5.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Fingerprint,
+                                contentDescription = "Biometric",
+                                tint = BrandOrange,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Biometric Unlock",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Use fingerprint or face to unlock",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = biometricEnabled,
+                                onCheckedChange = {
+                                    biometricEnabled = it
+                                    PreferencesManager.biometricEnabled = it
+                                },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = BrandOrange,
+                                    checkedTrackColor = BrandOrange.copy(alpha = 0.3f)
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
             // Notes Preferences section
