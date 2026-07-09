@@ -183,21 +183,28 @@ class NotesViewModel(
                         isSyncing = false,
                         lastSyncedAt = System.currentTimeMillis()
                     )
-                    // One-shot dedup of any duplicates that piled up before
-                    // the v1.7.1 sync-flag fix. Server endpoint is a no-op
-                    // when there are no duplicates, so it's safe to call
-                    // every sync — but we only surface a toast when it
-                    // actually cleaned something up.
-                    val removed = repository.dedupNotesOnServer()
-                    // Reload once after sync (and the dedup). Previously this
-                    // called loadNotes(silent) twice — once unconditionally
-                    // and again when dedup removed > 0 — which doubled the
-                    // server round-trips and the uiState emits on every sync.
-                    loadNotes(silent = true)
-                    ephemeralMessage = if (removed > 0) {
-                        "Cleaned up $removed duplicate note${if (removed == 1) "" else "s"} from a previous sync"
+                    // Only show sync confirmation when we're actually online
+                    // and have a token (i.e. sync actually talked to the server).
+                    val hasToken = !com.example.echowithin.data.network.SessionManager.token.isNullOrBlank() &&
+                            com.example.echowithin.data.network.SessionManager.token != "null"
+                    if (hasToken) {
+                        // One-shot dedup of any duplicates that piled up before
+                        // the v1.7.1 sync-flag fix. Server endpoint is a no-op
+                        // when there are no duplicates, so it's safe to call
+                        // every sync — but we only surface a toast when it
+                        // actually cleaned something up.
+                        val removed = repository.dedupNotesOnServer()
+                        // Reload once after sync (and the dedup).
+                        loadNotes(silent = true)
+                        ephemeralMessage = if (removed > 0) {
+                            "Cleaned up $removed duplicate note${if (removed == 1) "" else "s"} from a previous sync"
+                        } else if (force) {
+                            // Only show "Synced" when the user explicitly tapped sync,
+                            // not on every auto-sync which would be spammy.
+                            "Synced with the server"
+                        } else null
                     } else {
-                        "Synced with the server"
+                        loadNotes(silent = true)
                     }
                 }
                 .onFailure { t ->
@@ -648,6 +655,22 @@ class NotesViewModel(
                 .onFailure {
                     uiState = uiState.copy(isLoading = false, error = it.message ?: "Could not update note")
                 }
+        }
+    }
+
+    /**
+     * Save note locally as a draft without triggering server sync.
+     * Fire-and-forget — the caller navigates back immediately.
+     * The note will be synced on the next auto-sync cycle or manual sync.
+     */
+    fun saveDraft(noteId: String?, content: String, reference: String, tags: List<String>) {
+        viewModelScope.launch {
+            if (noteId == null) {
+                repository.createNote(content = content, reference = reference, tags = tags)
+            } else {
+                repository.editNote(noteId = noteId, content = content, reference = reference, tags = tags)
+            }
+            loadNotes(silent = true)
         }
     }
 

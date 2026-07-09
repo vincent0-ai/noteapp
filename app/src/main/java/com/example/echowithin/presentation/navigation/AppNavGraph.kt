@@ -445,6 +445,10 @@ fun AppNavGraph(
                         }
                     }
                 },
+                onSaveDraft = { content, reference, tags ->
+                    // Save locally as draft — fire-and-forget, no navigation
+                    notesViewModel.saveDraft(noteId, content, reference, tags)
+                },
                 isLocked = appLockViewModel.uiState.isLocked,
                 lockError = appLockViewModel.uiState.error,
                 lockLoading = appLockViewModel.uiState.isLoading,

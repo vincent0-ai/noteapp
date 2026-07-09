@@ -272,6 +272,7 @@ class NotesRepository(
         runCatching {
             val tempId = "local_" + java.util.UUID.randomUUID().toString()
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                 .format(java.util.Date())
             
             val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
@@ -297,6 +298,7 @@ class NotesRepository(
     suspend fun editNote(noteId: String, content: String, reference: String, tags: List<String>): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                 .format(java.util.Date())
             
             val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"

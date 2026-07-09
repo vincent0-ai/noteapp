@@ -1679,7 +1679,7 @@ fun NoteCard(
         val lines = strippedContent.lineSequence().toList()
         if (lines.size <= 1) strippedContent else lines.drop(1).joinToString(" ").trim()
     }
-    val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
+    val relativeTime = formatRelativeTime(note.updatedAt)
 
     val selectionBgColor = if (isSelected) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)

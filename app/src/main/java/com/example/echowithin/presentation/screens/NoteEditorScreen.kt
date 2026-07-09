@@ -104,6 +104,7 @@ fun NoteEditorScreen(
     isSaving: Boolean,
     onBack: () -> Unit,
     onSave: (content: String, reference: String, tags: List<String>) -> Unit,
+    onSaveDraft: (content: String, reference: String, tags: List<String>) -> Unit = onSave,
     // Lock integration
     isLocked: Boolean,
     lockError: String?,
@@ -131,13 +132,16 @@ fun NoteEditorScreen(
         if (content.isBlank()) 0 else content.trim().split("\\s+".toRegex()).size
     }
 
-    // Auto-save on back: save draft if there are real changes
+    // Auto-save draft on back: saves locally without triggering server sync.
+    // The onSaveDraft callback handles the local DB save; we call onBack()
+    // ourselves because onSaveDraft does NOT navigate (unlike onSave which
+    // pops the back stack via its onDone callback).
     val autoSaveOnBack = {
         val hasRealChanges = content != initialContent ||
             reference != initialReference ||
             tags != initialTags
         if (hasRealChanges && content.isNotBlank() && !isSaving) {
-            onSave(
+            onSaveDraft(
                 content,
                 reference,
                 tags.split(',').map { it.trim() }.filter { it.isNotBlank() }
@@ -145,6 +149,9 @@ fun NoteEditorScreen(
         }
         onBack()
     }
+
+    // Intercept system back button / gesture so unsaved edits are drafted
+    androidx.activity.compose.BackHandler(onBack = autoSaveOnBack)
 
     Scaffold(
         topBar = {
@@ -370,17 +377,19 @@ private fun WriteTab(
             modifier = Modifier.weight(1f)
         ) {
             // Typing area: fills maximum height and scrolls internally
+            val editorScrollState = rememberScrollState()
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .verticalScroll(editorScrollState)
             ) {
                 TextField(
                     value = contentField,
                     onValueChange = onContentChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .defaultMinSize(minHeight = 300.dp),
                     placeholder = { Text("Write your thoughts...") },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,

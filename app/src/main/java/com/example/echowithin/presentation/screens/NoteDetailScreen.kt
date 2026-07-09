@@ -481,10 +481,19 @@ fun NoteDetailScreen(
                     }
                 }
 
-                // Check if the note content contains mathematical/LaTeX delimiters: $ or $$
+                // Check if the note content contains actual mathematical/LaTeX delimiters
+                // Only match $...$ or $$...$$ with actual content between them,
+                // not plain dollar signs like "$5" or "$100"
                 val contentText = note?.content.orEmpty()
                 val containsMath = remember(contentText) {
-                    contentText.contains("$")
+                    // Match $$...$$  or  $...$  where ... contains at least one
+                    // LaTeX-like character (backslash, ^, _, {, }) to avoid
+                    // false positives on plain currency amounts.
+                    Regex("""\$\$[^$]+\$\$|\$[^$\s][^$]*[^$\s]\$""").containsMatchIn(contentText) ||
+                        // Also match single-char math like $x$ or $1$
+                        Regex("""\$[^$\s]\$""").containsMatchIn(contentText) ||
+                        // Match \( ... \) or \[ ... \] LaTeX delimiters
+                        contentText.contains("\\(") || contentText.contains("\\[")
                 }
 
                 // Note Content Panel — full-screen, no Card chrome so the note fills
