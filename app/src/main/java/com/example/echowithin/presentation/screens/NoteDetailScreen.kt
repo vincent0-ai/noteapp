@@ -481,98 +481,64 @@ fun NoteDetailScreen(
                     }
                 }
 
-                // Check if the note content contains actual mathematical/LaTeX delimiters
-                // Only match $...$ or $$...$$ with actual content between them,
-                // not plain dollar signs like "$5" or "$100"
-                val contentText = note?.content.orEmpty()
-                val containsMath = remember(contentText) {
-                    // Match $$...$$  or  $...$  where ... contains at least one
-                    // LaTeX-like character (backslash, ^, _, {, }) to avoid
-                    // false positives on plain currency amounts.
-                    Regex("""\$\$[^$]+\$\$|\$[^$\s][^$]*[^$\s]\$""").containsMatchIn(contentText) ||
-                        // Also match single-char math like $x$ or $1$
-                        Regex("""\$[^$\s]\$""").containsMatchIn(contentText) ||
-                        // Match \( ... \) or \[ ... \] LaTeX delimiters
-                        contentText.contains("\\(") || contentText.contains("\\[")
-                }
-
                 // Note Content Panel — full-screen, no Card chrome so the note fills
                 // the entire viewport edge-to-edge. The outer vertical scroll
                 // still carries the user through long notes.
+                //
+                // Always use the WebView renderer which bundles marked.js
+                // (markdown) and KaTeX (math) locally — works offline and
+                // matches the backend rendering exactly.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 160.dp)
                 ) {
-                        if (containsMath) {
-                            val isDark = isSystemInDarkTheme()
-                            // Tracks what we last injected into the WebView so
-                            // the `update` block only re-runs the JS render
-                            // when the content or theme ACTUALLY changed.
-                            // Without this, every recomposition (an isSyncing
-                            // flip, a lock toggle, a sticky-bar redraw)
-                            // re-allocated a WebViewClient and re-ran
-                            // evaluateJavascript(), forcing KaTeX to re-render
-                            // -> layout pass -> outer Compose re-measure ->
-                            // scroll hitch on the detail screen.
-                            val injected = remember { mutableStateOf("" to false) }
-                            androidx.compose.ui.viewinterop.AndroidView(
-                                factory = { ctx ->
-                                    android.webkit.WebView(ctx).apply {
-                                        settings.apply {
-                                            javaScriptEnabled = true
-                                            allowFileAccess = true
-                                            domStorageEnabled = true
-                                            // The WebView grows with its content
-                                            // and is fully driven by the outer
-                                            // vertical scroll — no nested scroll.
-                                            layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
-                                            isVerticalScrollBarEnabled = false
-                                            isHorizontalScrollBarEnabled = false
-                                            overScrollMode = android.view.View.OVER_SCROLL_NEVER
-                                        }
-                                        // Assign the client ONCE in factory.
-                                        // onPageFinished renders the content
-                                        // the first time the KaTeX page loads;
-                                        // subsequent content/theme changes are
-                                        // pushed by the `update` block below.
-                                        webViewClient = object : android.webkit.WebViewClient() {
-                                            override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
-                                                val (text, dark) = injected.value
-                                                if (text.isNotEmpty()) {
-                                                    val escaped = escapeJsTemplateLiteral(text)
-                                                    view?.evaluateJavascript("renderContent(`$escaped`, $dark)", null)
-                                                }
+                        val isDark = isSystemInDarkTheme()
+                        val contentText = note?.content.orEmpty()
+                        // Tracks what we last injected into the WebView so
+                        // the `update` block only re-runs the JS render
+                        // when the content or theme ACTUALLY changed.
+                        val injected = remember { mutableStateOf("" to false) }
+                        androidx.compose.ui.viewinterop.AndroidView(
+                            factory = { ctx ->
+                                android.webkit.WebView(ctx).apply {
+                                    settings.apply {
+                                        javaScriptEnabled = true
+                                        allowFileAccess = true
+                                        domStorageEnabled = true
+                                        // The WebView grows with its content
+                                        // and is fully driven by the outer
+                                        // vertical scroll — no nested scroll.
+                                        layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                                        isVerticalScrollBarEnabled = false
+                                        isHorizontalScrollBarEnabled = false
+                                        overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                                    }
+                                    // Assign the client ONCE in factory.
+                                    webViewClient = object : android.webkit.WebViewClient() {
+                                        override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                            val (text, dark) = injected.value
+                                            if (text.isNotEmpty()) {
+                                                val escaped = escapeJsTemplateLiteral(text)
+                                                view?.evaluateJavascript("renderContent(`$escaped`, $dark)", null)
                                             }
                                         }
-                                        loadUrl("file:///android_asset/katex/math_renderer.html")
                                     }
-                                },
-                                update = { webView ->
-                                    val last = injected.value
-                                    if (last.first != contentText || last.second != isDark) {
-                                        injected.value = contentText to isDark
-                                        val escaped = escapeJsTemplateLiteral(contentText)
-                                        webView.evaluateJavascript("renderContent(`$escaped`, $isDark)", null)
-                                    }
-                                },
+                                    loadUrl("file:///android_asset/katex/math_renderer.html")
+                                }
+                            },
+                            update = { webView ->
+                                val last = injected.value
+                                if (last.first != contentText || last.second != isDark) {
+                                    injected.value = contentText to isDark
+                                    val escaped = escapeJsTemplateLiteral(contentText)
+                                    webView.evaluateJavascript("renderContent(`$escaped`, $isDark)", null)
+                                }
+                            },
 modifier = Modifier
-                                     .fillMaxWidth()
-                                     .padding(horizontal = 16.dp, vertical = 14.dp)
-                            )
-                        } else {
-                            Text(
-                                text = displayContent,
-                                style = MaterialTheme.typography.bodyLarge.copy(
-                                    fontSize = 17.sp,
-                                    lineHeight = 26.sp
-                                ),
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 14.dp)
-                            )
-                        }
+                                 .fillMaxWidth()
+                                 .padding(horizontal = 16.dp, vertical = 14.dp)
+                        )
                     }
 
 

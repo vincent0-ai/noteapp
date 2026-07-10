@@ -370,26 +370,28 @@ private fun WriteTab(
     var isDetailsExpanded by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier.fillMaxSize().imePadding()
+        modifier = Modifier
+            .fillMaxSize()
+            .imePadding()
     ) {
         // Main editor wrapper that handles keyboard padding and fills available space
         Column(
             modifier = Modifier.weight(1f)
         ) {
-            // Typing area: fills maximum height and scrolls internally
-            val editorScrollState = rememberScrollState()
+            // Typing area: fills maximum height; the TextField handles its own
+            // internal scrolling and cursor-into-view logic. Do NOT wrap in
+            // verticalScroll — that breaks cursor auto-scroll.
             Column(
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
-                    .verticalScroll(editorScrollState)
             ) {
                 TextField(
                     value = contentField,
                     onValueChange = onContentChange,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .defaultMinSize(minHeight = 300.dp),
+                        .weight(1f),
                     placeholder = { Text("Write your thoughts...") },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
