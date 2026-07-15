@@ -27,7 +27,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.border
 import com.example.echowithin.data.model.AppNote
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.example.echowithin.data.model.ProposalDto
 import com.example.echowithin.data.model.ShareDto
 import com.example.echowithin.data.model.NotificationDto
@@ -159,6 +162,7 @@ fun HomeScreen(
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenMultipleDocuments()
     ) { uris ->
@@ -193,14 +197,22 @@ fun HomeScreen(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
         if (uri != null) {
-            try {
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    NoteImportExportHelper.exportToZip(unlockedNotes, outputStream)
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                            NoteImportExportHelper.exportToZip(unlockedNotes, outputStream)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Notes exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    }
                 }
-                android.widget.Toast.makeText(context, "Notes exported successfully", android.widget.Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

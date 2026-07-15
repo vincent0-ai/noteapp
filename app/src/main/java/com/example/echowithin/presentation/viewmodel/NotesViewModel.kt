@@ -661,15 +661,14 @@ class NotesViewModel(
     /**
      * Save note locally as a draft without triggering server sync.
      * Fire-and-forget — the caller navigates back immediately.
-     * The note will be synced on the next auto-sync cycle or manual sync.
+     * Drafts are saved with isSynced=true and pendingOp="none" so
+     * they are NOT picked up by the sync pipeline until the user
+     * explicitly taps Save (which calls editNote/createNote with
+     * proper sync flags).
      */
     fun saveDraft(noteId: String?, content: String, reference: String, tags: List<String>) {
         viewModelScope.launch {
-            if (noteId == null) {
-                repository.createNote(content = content, reference = reference, tags = tags)
-            } else {
-                repository.editNote(noteId = noteId, content = content, reference = reference, tags = tags)
-            }
+            repository.saveDraftLocally(noteId, content, reference, tags)
             loadNotes(silent = true)
         }
     }
@@ -855,10 +854,17 @@ class NotesViewModel(
         val unpinned = notes.filter { !it.isPinned }
 
         val sortedUnpinned = when (uiState.sortOrder) {
-            "date_created" -> unpinned.sortedByDescending { it.updatedAt }
-            "title_az" -> unpinned.sortedBy { it.title.lowercase() }
-            "title_za" -> unpinned.sortedByDescending { it.title.lowercase() }
-            else -> unpinned // date_modified is default DB order
+            "updated_desc"  -> unpinned.sortedByDescending { it.updatedAt }
+            "updated_asc"   -> unpinned.sortedBy { it.updatedAt }
+            "title_asc"     -> unpinned.sortedBy { it.title.lowercase() }
+            "title_desc"    -> unpinned.sortedByDescending { it.title.lowercase() }
+            "created_desc"  -> unpinned.sortedByDescending { it.updatedAt }
+            "created_asc"   -> unpinned.sortedBy { it.updatedAt }
+            "date_modified" -> unpinned // DB default, already sorted
+            "date_created"  -> unpinned.sortedByDescending { it.updatedAt }
+            "title_az"      -> unpinned.sortedBy { it.title.lowercase() }
+            "title_za"      -> unpinned.sortedByDescending { it.title.lowercase() }
+            else -> unpinned // fallback: DB default order
         }
 
         var result = pinned + sortedUnpinned

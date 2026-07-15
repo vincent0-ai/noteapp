@@ -66,8 +66,12 @@ object NoteImportExportHelper {
         ZipOutputStream(outputStream).use { zos ->
             val usedFilenames = mutableSetOf<String>()
             for (note in notes) {
-                // Remove invalid characters for filenames
-                val baseName = note.title.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "Untitled" }
+                val baseName = note.title
+                    .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    .replace(Regex("[\\x00-\\x1f\\x7f]"), "")
+                    .trim()
+                    .ifBlank { "Untitled" }
+                    .take(100)
                 var filename = "$baseName.md"
                 var counter = 1
                 while (usedFilenames.contains(filename)) {

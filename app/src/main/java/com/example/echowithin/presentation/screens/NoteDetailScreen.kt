@@ -43,6 +43,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.MoreVert
 import com.example.echowithin.data.repository.NoteImportExportHelper
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // Pre-compiled regex patterns for markdown rendering
 private val headingRegex = Regex("^(#+)\\s+(.*)$")
@@ -95,6 +98,7 @@ fun NoteDetailScreen(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val coroutineScope = rememberCoroutineScope()
     var noteState by remember { mutableStateOf(initialNote) }
     var isLoading by remember { mutableStateOf(initialNote == null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -102,15 +106,20 @@ fun NoteDetailScreen(
         contract = ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri ->
         if (uri != null && noteState != null) {
-            try {
-                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    val content = NoteImportExportHelper.exportToMarkdown(noteState!!)
-                    outputStream.write(content.toByteArray(Charsets.UTF_8))
+            val note = noteState!!
+            coroutineScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                            val content = NoteImportExportHelper.exportToMarkdown(note)
+                            outputStream.write(content.toByteArray(Charsets.UTF_8))
+                        }
+                    }
+                    android.widget.Toast.makeText(context, "Note exported successfully", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                 }
-                android.widget.Toast.makeText(context, "Note exported successfully", android.widget.Toast.LENGTH_SHORT).show()
-            } catch (e: Exception) {
-                e.printStackTrace()
-                android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
             }
         }
     }

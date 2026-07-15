@@ -133,11 +133,17 @@ class NotesRepository(
                             serverCount++
                             pushedNoteIds.add(response.id)
                             
-                            // Sync pin status if pinned offline
+                             // Sync pin status if pinned offline
                             if (note.isPinned) {
                                 try {
                                     api.toggleNotePin(response.id)
-                                } catch (_: Exception) {}
+                                } catch (_: Exception) {
+                                    dbHelper.saveNote(
+                                        note.copy(id = response.id, isSynced = false, pendingOp = "edit"),
+                                        isSynced = false,
+                                        pendingOp = "edit"
+                                    )
+                                }
                             }
                         }
                     }
@@ -158,12 +164,18 @@ class NotesRepository(
                             )
                             pushedNoteIds.add(note.id)
                             
-                            // Sync pin status if it changed offline
+                             // Sync pin status if it changed offline
                             val serverNote = initialResponse?.notes?.find { it.id == note.id }
                             if (serverNote != null && serverNote.is_pinned != note.isPinned) {
                                 try {
                                     api.toggleNotePin(note.id)
-                                } catch (_: Exception) {}
+                                } catch (_: Exception) {
+                                    dbHelper.saveNote(
+                                        note.copy(isSynced = false, pendingOp = "edit"),
+                                        isSynced = false,
+                                        pendingOp = "edit"
+                                    )
+                                }
                             }
                         }
                     }
@@ -221,7 +233,11 @@ class NotesRepository(
                 dbHelper.saveNote(serverNote, isSynced = true, pendingOp = "none")
             } else if (local.isSynced) {
                 if (isServerNoteNewerOrEqual(serverNote, local)) {
-                    dbHelper.saveNote(serverNote, isSynced = true, pendingOp = "none")
+                    val merged = serverNote.copy(
+                        isPinned = local.isPinned,
+                        isLocked = local.isLocked
+                    )
+                    dbHelper.saveNote(merged, isSynced = true, pendingOp = "none")
                 }
             }
         }
@@ -303,7 +319,9 @@ class NotesRepository(
             
             val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
             val existing = dbHelper.getNoteById(noteId)
-            val pendingOp = if (!hasToken) "none" else (if (existing?.pendingOp == "create") "create" else "edit")
+            val pendingOp = if (!hasToken) "none"
+                else if (noteId.startsWith("local_") || existing?.pendingOp == "create") "create"
+                else "edit"
             
             val note = AppNote(
                 id = noteId,
@@ -315,11 +333,65 @@ class NotesRepository(
                 isLocked = existing?.isLocked ?: false,
                 isPinned = existing?.isPinned ?: false,
                 isSynced = false,
-                pendingOp = pendingOp
+                pendingOp = pendingOp,
+                updateAvailable = existing?.updateAvailable ?: false,
+                sourceNoteId = existing?.sourceNoteId,
+                sourceShareId = existing?.sourceShareId,
+                trashedAt = existing?.trashedAt,
+                folder = existing?.folder,
+                isTrashed = existing?.isTrashed ?: false
             )
             
             dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)
             noteId
+        }
+    }
+
+    suspend fun saveDraftLocally(noteId: String?, content: String, reference: String, tags: List<String>): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
+                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
+                .format(java.util.Date())
+
+            if (noteId == null) {
+                val tempId = "local_" + java.util.UUID.randomUUID().toString()
+                val note = AppNote(
+                    id = tempId,
+                    title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
+                    content = content,
+                    reference = reference,
+                    tags = tags,
+                    updatedAt = now,
+                    isLocked = false,
+                    isPinned = false,
+                    isSynced = true,
+                    pendingOp = "none"
+                )
+                dbHelper.saveNote(note, isSynced = true, pendingOp = "none")
+                tempId
+            } else {
+                val existing = dbHelper.getNoteById(noteId)
+                val note = AppNote(
+                    id = noteId,
+                    title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
+                    content = content,
+                    reference = reference,
+                    tags = tags,
+                    updatedAt = now,
+                    isLocked = existing?.isLocked ?: false,
+                    isPinned = existing?.isPinned ?: false,
+                    isSynced = true,
+                    pendingOp = "none",
+                    updateAvailable = existing?.updateAvailable ?: false,
+                    sourceNoteId = existing?.sourceNoteId,
+                    sourceShareId = existing?.sourceShareId,
+                    trashedAt = existing?.trashedAt,
+                    folder = existing?.folder,
+                    isTrashed = existing?.isTrashed ?: false
+                )
+                dbHelper.saveNote(note, isSynced = true, pendingOp = "none")
+                noteId
+            }
         }
     }
 
