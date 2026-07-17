@@ -244,7 +244,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             return
         }
         
-        if (note.pendingOp == "create") {
+        if (note.pendingOp == "create" || note.id.startsWith("local_")) {
             // If created offline and deleted offline, just remove it entirely!
             db.delete(TABLE_NOTES, "$COLUMN_ID = ?", arrayOf(id))
         } else {
@@ -294,14 +294,10 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
      */
     override fun clearSyncedNotes() {
         val db = writableDatabase
-        // Delete notes that are either:
-        // - is_synced = 1 (fully synced with server)
-        // - id does NOT start with 'local_' (i.e., real server IDs)
-        // - pending_op != 'none' (pending create/edit/delete that was meant to sync)
-        // Keep only: local_* notes with is_synced=0 AND pending_op='none'
+        // Delete all notes that are associated with the server account (id does not start with local_)
         db.delete(
             TABLE_NOTES,
-            "$COLUMN_IS_SYNCED = 1 OR ($COLUMN_ID NOT LIKE 'local_%' AND $COLUMN_PENDING_OP != 'none')",
+            "$COLUMN_ID NOT LIKE 'local_%'",
             null
         )
     }
@@ -343,7 +339,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             // Already hidden or doesn't exist — silently ignore
             return
         }
-        if (note.pendingOp == "create") {
+        if (note.pendingOp == "create" || note.id.startsWith("local_")) {
             // If created offline and trashed offline, just remove it entirely
             db.delete(TABLE_NOTES, "$COLUMN_ID = ?", arrayOf(id))
         } else {

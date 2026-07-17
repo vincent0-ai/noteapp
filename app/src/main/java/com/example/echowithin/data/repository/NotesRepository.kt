@@ -232,6 +232,10 @@ class NotesRepository(
             if (local == null) {
                 dbHelper.saveNote(serverNote, isSynced = true, pendingOp = "none")
             } else if (local.isSynced) {
+                if (local.pendingOp == "draft") {
+                    // Do not overwrite local drafts with older/newer server versions
+                    continue
+                }
                 if (isServerNoteNewerOrEqual(serverNote, local)) {
                     val merged = serverNote.copy(
                         isPinned = local.isPinned,
@@ -365,9 +369,9 @@ class NotesRepository(
                     isLocked = false,
                     isPinned = false,
                     isSynced = true,
-                    pendingOp = "none"
+                    pendingOp = "draft"
                 )
-                dbHelper.saveNote(note, isSynced = true, pendingOp = "none")
+                dbHelper.saveNote(note, isSynced = true, pendingOp = "draft")
                 tempId
             } else {
                 val existing = dbHelper.getNoteById(noteId)
@@ -381,7 +385,7 @@ class NotesRepository(
                     isLocked = existing?.isLocked ?: false,
                     isPinned = existing?.isPinned ?: false,
                     isSynced = true,
-                    pendingOp = "none",
+                    pendingOp = "draft",
                     updateAvailable = existing?.updateAvailable ?: false,
                     sourceNoteId = existing?.sourceNoteId,
                     sourceShareId = existing?.sourceShareId,
@@ -389,7 +393,7 @@ class NotesRepository(
                     folder = existing?.folder,
                     isTrashed = existing?.isTrashed ?: false
                 )
-                dbHelper.saveNote(note, isSynced = true, pendingOp = "none")
+                dbHelper.saveNote(note, isSynced = true, pendingOp = "draft")
                 noteId
             }
         }
@@ -587,9 +591,9 @@ class NotesRepository(
     suspend fun toggleNotePin(noteId: String): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
             val isGuest = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
+            val local = dbHelper.getNoteById(noteId) ?: throw Exception("Note not found")
+            val newPinned = !local.isPinned
             if (isGuest) {
-                val local = dbHelper.getNoteById(noteId) ?: throw Exception("Note not found")
-                val newPinned = !local.isPinned
                 dbHelper.saveNote(
                     local.copy(isPinned = newPinned),
                     isSynced = false,
@@ -597,19 +601,26 @@ class NotesRepository(
                 )
                 newPinned
             } else {
-                val response = api.toggleNotePin(noteId)
-                if (response.success) {
-                    val local = dbHelper.getNoteById(noteId)
-                    if (local != null) {
+                try {
+                    val response = api.toggleNotePin(noteId)
+                    if (response.success) {
                         dbHelper.saveNote(
                             local.copy(isPinned = response.is_pinned),
                             isSynced = local.isSynced,
                             pendingOp = local.pendingOp
                         )
+                        response.is_pinned
+                    } else {
+                        throw Exception(response.error ?: "Toggle pin failed")
                     }
-                    response.is_pinned
-                } else {
-                    throw Exception(response.error ?: "Toggle pin failed")
+                } catch (e: Exception) {
+                    // Fallback to local pin status when offline/network failure
+                    dbHelper.saveNote(
+                        local.copy(isPinned = newPinned),
+                        isSynced = false,
+                        pendingOp = if (local.pendingOp == "none" || local.pendingOp == "draft") "edit" else local.pendingOp
+                    )
+                    newPinned
                 }
             }
         }

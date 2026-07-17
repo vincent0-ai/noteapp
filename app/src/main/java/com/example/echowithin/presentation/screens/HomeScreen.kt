@@ -465,7 +465,32 @@ fun HomeScreen(
                                     text = { Text("Export All Notes (ZIP)") },
                                     onClick = {
                                         menuExpanded = false
-                                        exportLauncher.launch("echowithin_export.zip")
+                                        try {
+                                            exportLauncher.launch("echowithin_export.zip")
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                            // Fallback: write to cache and trigger share sheet
+                                            try {
+                                                val cacheFile = java.io.File(context.cacheDir, "echowithin_export.zip")
+                                                java.io.FileOutputStream(cacheFile).use { fos ->
+                                                    com.example.echowithin.data.repository.NoteImportExportHelper.exportToZip(unlockedNotes, fos)
+                                                }
+                                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.fileprovider",
+                                                    cacheFile
+                                                )
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                    type = "application/zip"
+                                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                context.startActivity(android.content.Intent.createChooser(intent, "Share notes ZIP via"))
+                                            } catch (ex: Exception) {
+                                                ex.printStackTrace()
+                                                android.widget.Toast.makeText(context, "Export failed: ${ex.message}", android.widget.Toast.LENGTH_LONG).show()
+                                            }
+                                        }
                                     }
                                 )
                             }
@@ -1758,7 +1783,14 @@ fun NoteCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    if (!note.isSynced) {
+                    if (note.pendingOp == "draft") {
+                        Text(
+                            text = "Draft",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BrandOrange,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    } else if (!note.isSynced) {
                         val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
                         Text(
                             text = badgeText,

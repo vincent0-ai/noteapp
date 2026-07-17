@@ -295,8 +295,9 @@ class NotesViewModel(
         val (localNotes, pending) = withContext(Dispatchers.IO) {
             repository.getLocalNotes() to pendingSyncCount()
         }
+        val sortedLocal = sortAndFilterNotes(localNotes)
         uiState = uiState.copy(
-            notes = localNotes,
+            notes = sortedLocal,
             isLoading = localNotes.isEmpty(),
             pendingSyncCount = pending,
             error = null,
@@ -327,8 +328,9 @@ class NotesViewModel(
             val (localNotes, pending) = withContext(Dispatchers.IO) {
                 repository.getLocalNotes() to pendingSyncCount()
             }
+            val sortedLocal = sortAndFilterNotes(localNotes)
             uiState = uiState.copy(
-                notes = localNotes,
+                notes = sortedLocal,
                 isLoading = localNotes.isEmpty(),
                 pendingSyncCount = pending,
                 error = null
@@ -344,8 +346,9 @@ class NotesViewModel(
                 val (updatedNotes, newPending) = withContext(Dispatchers.IO) {
                     repository.getLocalNotes() to pendingSyncCount()
                 }
+                val sortedUpdated = sortAndFilterNotes(updatedNotes)
                 uiState = uiState.copy(
-                    notes = updatedNotes,
+                    notes = sortedUpdated,
                     isLoading = false,
                     pendingSyncCount = newPending,
                     lastSyncedAt = if (newPending < pending) System.currentTimeMillis() else uiState.lastSyncedAt
@@ -365,16 +368,17 @@ class NotesViewModel(
             val (localNotes, pending) = withContext(Dispatchers.IO) {
                 repository.getLocalNotes() to pendingSyncCount()
             }
+            val sortedLocal = sortAndFilterNotes(localNotes)
             if (!silent) {
                 uiState = uiState.copy(
-                    notes = localNotes,
+                    notes = sortedLocal,
                     isLoading = localNotes.isEmpty(),
                     error = null,
                     pendingSyncCount = pending
                 )
             } else {
                 uiState = uiState.copy(
-                    notes = localNotes,
+                    notes = sortedLocal,
                     error = null,
                     pendingSyncCount = pending
                 )
@@ -382,9 +386,10 @@ class NotesViewModel(
 
             repository.getNotes()
                 .onSuccess { notes ->
+                    val sortedNotes = sortAndFilterNotes(notes)
                     uiState = uiState.copy(
                         isLoading = false,
-                        notes = notes,
+                        notes = sortedNotes,
                         lastSyncedAt = System.currentTimeMillis()
                     )
                     refreshPendingSyncCount()

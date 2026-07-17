@@ -43,6 +43,7 @@ fun SettingsScreen(
     downloadProgress: Float?,
     onConfirmUpdate: () -> Unit,
     onDismissUpdate: () -> Unit,
+    onSortOrderChanged: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isLoggedIn = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
@@ -364,6 +365,7 @@ fun SettingsScreen(
                                             .clickable {
                                                 currentSort = key
                                                 PreferencesManager.sortOrder = key
+                                                onSortOrderChanged(key)
                                                 showSortDialog = false
                                             }
                                             .padding(vertical = 10.dp),
@@ -374,6 +376,7 @@ fun SettingsScreen(
                                             onClick = {
                                                 currentSort = key
                                                 PreferencesManager.sortOrder = key
+                                                onSortOrderChanged(key)
                                                 showSortDialog = false
                                             }
                                         )

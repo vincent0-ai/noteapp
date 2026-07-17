@@ -202,7 +202,34 @@ fun NoteDetailScreen(
                                 onClick = {
                                     menuExpanded = false
                                     val defaultName = (noteState?.title ?: "note").replace(Regex("[\\\\/:*?\"<>|]"), "_").trim() + ".md"
-                                    singleExportLauncher.launch(defaultName)
+                                    try {
+                                        singleExportLauncher.launch(defaultName)
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                        // Fallback: write to cache and trigger share sheet
+                                        try {
+                                            val note = noteState
+                                            if (note != null) {
+                                                val cacheFile = java.io.File(context.cacheDir, defaultName)
+                                                val content = com.example.echowithin.data.repository.NoteImportExportHelper.exportToMarkdown(note)
+                                                cacheFile.writeText(content, Charsets.UTF_8)
+                                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.fileprovider",
+                                                    cacheFile
+                                                )
+                                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                    type = "text/markdown"
+                                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                context.startActivity(android.content.Intent.createChooser(intent, "Share note via"))
+                                            }
+                                        } catch (ex: Exception) {
+                                            ex.printStackTrace()
+                                            android.widget.Toast.makeText(context, "Export failed: ${ex.message}", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                    }
                                 }
                             )
                             if (noteState?.sourceNoteId != null) {

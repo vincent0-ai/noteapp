@@ -615,7 +615,8 @@ fun AppNavGraph(
                 updateInfo = notesViewModel.uiState.updateInfo,
                 downloadProgress = notesViewModel.uiState.downloadProgress,
                 onConfirmUpdate = { notesViewModel.downloadAndInstallUpdate(context, notesViewModel.uiState.updateInfo?.apkUrl ?: "") },
-                onDismissUpdate = { notesViewModel.dismissUpdate() }
+                onDismissUpdate = { notesViewModel.dismissUpdate() },
+                onSortOrderChanged = { notesViewModel.setSortOrder(it) }
             )
         }
     }
