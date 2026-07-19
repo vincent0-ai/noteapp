@@ -537,15 +537,23 @@ fun NoteDetailScreen(
                         val injected = remember { mutableStateOf("" to false) }
                         androidx.compose.ui.viewinterop.AndroidView(
                             factory = { ctx ->
-                                android.webkit.WebView(ctx).apply {
+                                object : android.webkit.WebView(ctx) {
+                                    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+                                        val result = super.onTouchEvent(event)
+                                        parent?.requestDisallowInterceptTouchEvent(false)
+                                        return result
+                                    }
+                                }.apply {
                                     settings.apply {
                                         javaScriptEnabled = true
                                         allowFileAccess = true
                                         domStorageEnabled = true
+                                        useWideViewPort = true
+                                        loadWithOverviewMode = true
                                         // The WebView grows with its content
                                         // and is fully driven by the outer
                                         // vertical scroll — no nested scroll.
-                                        layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                                        layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.NORMAL
                                         isVerticalScrollBarEnabled = false
                                         isHorizontalScrollBarEnabled = false
                                         overScrollMode = android.view.View.OVER_SCROLL_NEVER
