@@ -505,86 +505,96 @@ fun NoteDetailScreen(
                     }
                 }
 
-                // Content - render full content as markdown (no first-line dropping)
-                val primaryColor = MaterialTheme.colorScheme.primary
-                val secondaryColor = MaterialTheme.colorScheme.secondary
-                val displayContent = remember(note, primaryColor, secondaryColor) {
-                    val fullContent = note?.content.orEmpty()
-                    if (fullContent.isBlank()) {
-                        buildAnnotatedString { append("No content available") }
-                    } else {
-                        renderMarkdown(fullContent, primaryColor, secondaryColor)
-                    }
-                }
+                // ── WebView markdown/math renderer ──
+                // Renders the note through marked.js + KaTeX inside an
+                // Android WebView. A JavaScript bridge reports the
+                // rendered content height so we can resize the WebView
+                // to exactly match — no internal scrolling, the outer
+                // Compose verticalScroll handles everything.
 
-                // Note Content Panel — full-screen, no Card chrome so the note fills
-                // the entire viewport edge-to-edge. The outer vertical scroll
-                // still carries the user through long notes.
-                //
-                // Always use the WebView renderer which bundles marked.js
-                // (markdown) and KaTeX (math) locally — works offline and
-                // matches the backend rendering exactly.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 160.dp)
-                ) {
-                        val isDark = isSystemInDarkTheme()
-                        val contentText = note?.content.orEmpty()
-                        // Tracks what we last injected into the WebView so
-                        // the `update` block only re-runs the JS render
-                        // when the content or theme ACTUALLY changed.
-                        val injected = remember { mutableStateOf("" to false) }
-                        androidx.compose.ui.viewinterop.AndroidView(
-                            factory = { ctx ->
-                                object : android.webkit.WebView(ctx) {
-                                    override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
-                                        val result = super.onTouchEvent(event)
-                                        parent?.requestDisallowInterceptTouchEvent(false)
-                                        return result
-                                    }
-                                }.apply {
-                                    settings.apply {
-                                        javaScriptEnabled = true
-                                        allowFileAccess = true
-                                        domStorageEnabled = true
-                                        useWideViewPort = true
-                                        loadWithOverviewMode = true
-                                        // The WebView grows with its content
-                                        // and is fully driven by the outer
-                                        // vertical scroll — no nested scroll.
-                                        layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.NORMAL
-                                        isVerticalScrollBarEnabled = false
-                                        isHorizontalScrollBarEnabled = false
-                                        overScrollMode = android.view.View.OVER_SCROLL_NEVER
-                                    }
-                                    // Assign the client ONCE in factory.
-                                    webViewClient = object : android.webkit.WebViewClient() {
-                                        override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
-                                            val (text, dark) = injected.value
-                                            if (text.isNotEmpty()) {
-                                                val escaped = escapeJsTemplateLiteral(text)
-                                                view?.evaluateJavascript("renderContent(`$escaped`, $dark)", null)
-                                            }
+                val isDark = isSystemInDarkTheme()
+                val contentText = note?.content.orEmpty()
+                // Density for converting CSS-px → dp
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                // Holds the measured HTML content height in dp
+                var webContentHeight by remember { mutableStateOf(200.dp) }
+                // Tracks what we last injected so we only re-render on real changes
+                val injected = remember { mutableStateOf("" to false) }
+
+                androidx.compose.ui.viewinterop.AndroidView(
+                    factory = { ctx ->
+                        object : android.webkit.WebView(ctx) {
+                            // Let the parent Compose scroll always win
+                            override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+                                val result = super.onTouchEvent(event)
+                                parent?.requestDisallowInterceptTouchEvent(false)
+                                return result
+                            }
+                        }.apply {
+                            setBackgroundColor(android.graphics.Color.TRANSPARENT)
+
+                            settings.apply {
+                                javaScriptEnabled = true
+                                allowFileAccess = true
+                                domStorageEnabled = true
+                                // Do NOT set useWideViewPort / loadWithOverviewMode —
+                                // they force a wide virtual viewport (980px) which
+                                // squashes content into a narrow left-aligned column.
+                                layoutAlgorithm = android.webkit.WebSettings.LayoutAlgorithm.TEXT_AUTOSIZING
+                                isVerticalScrollBarEnabled = false
+                                isHorizontalScrollBarEnabled = false
+                                overScrollMode = android.view.View.OVER_SCROLL_NEVER
+                            }
+
+                            // JS → Kotlin bridge for reporting rendered content height
+                            @android.annotation.SuppressLint("JavascriptInterface")
+                            class HeightBridge {
+                                @android.webkit.JavascriptInterface
+                                fun onContentHeight(heightPx: Int) {
+                                    post {
+                                        with(density) {
+                                            webContentHeight = heightPx.toDp() + 32.dp  // small bottom padding
                                         }
                                     }
-                                    loadUrl("file:///android_asset/katex/math_renderer.html")
                                 }
-                            },
-                            update = { webView ->
-                                val last = injected.value
-                                if (last.first != contentText || last.second != isDark) {
-                                    injected.value = contentText to isDark
-                                    val escaped = escapeJsTemplateLiteral(contentText)
-                                    webView.evaluateJavascript("renderContent(`$escaped`, $isDark)", null)
-                                }
-                            },
-modifier = Modifier
-                                 .fillMaxWidth()
-                                 .padding(horizontal = 16.dp, vertical = 14.dp)
-                        )
-                    }
+                            }
+                            addJavascriptInterface(HeightBridge(), "AndroidBridge")
 
+                            webViewClient = object : android.webkit.WebViewClient() {
+                                override fun onPageFinished(view: android.webkit.WebView?, url: String?) {
+                                    val (text, dark) = injected.value
+                                    if (text.isNotEmpty()) {
+                                        val escaped = escapeJsTemplateLiteral(text)
+                                        view?.evaluateJavascript("renderContent(`$escaped`, $dark)", null)
+                                    }
+                                }
+                            }
+                            loadUrl("file:///android_asset/katex/math_renderer.html")
+                        }
+                    },
+                    update = { webView ->
+                        val last = injected.value
+                        if (last.first != contentText || last.second != isDark) {
+                            injected.value = contentText to isDark
+                            val escaped = escapeJsTemplateLiteral(contentText)
+                            webView.evaluateJavascript("renderContent(`$escaped`, $isDark)", null)
+                        }
+                    },
+                    onRelease = { webView ->
+                        webView.apply {
+                            stopLoading()
+                            removeJavascriptInterface("AndroidBridge")
+                            loadUrl("about:blank")
+                            clearHistory()
+                            removeAllViews()
+                            destroy()
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(webContentHeight)
+                        .padding(horizontal = 16.dp, vertical = 14.dp)
+                )
 
                 }  // close inner Column
 
