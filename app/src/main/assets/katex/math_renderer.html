@@ -204,13 +204,29 @@ function renderContent(rawText, isDark) {
 }
 
 function notifyHeight() {
-  // Small delay to let the browser finish layout/paint
   setTimeout(function() {
-    var h = document.getElementById('content').scrollHeight;
+    var contentEl = document.getElementById('content');
+    if (!contentEl) return;
+    var h = Math.max(
+      contentEl.scrollHeight,
+      contentEl.offsetHeight,
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
     if (typeof AndroidBridge !== 'undefined' && AndroidBridge.onContentHeight) {
       AndroidBridge.onContentHeight(h);
     }
   }, 100);
+}
+
+if (typeof ResizeObserver !== 'undefined') {
+  var ro = new ResizeObserver(function() {
+    notifyHeight();
+  });
+  window.addEventListener('DOMContentLoaded', function() {
+    var contentEl = document.getElementById('content');
+    if (contentEl) ro.observe(contentEl);
+  });
 }
 </script>
 </body>

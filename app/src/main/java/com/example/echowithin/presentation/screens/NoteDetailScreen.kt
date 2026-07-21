@@ -552,9 +552,7 @@ fun NoteDetailScreen(
                                 @android.webkit.JavascriptInterface
                                 fun onContentHeight(heightPx: Int) {
                                     post {
-                                        with(density) {
-                                            webContentHeight = heightPx.toDp() + 32.dp  // small bottom padding
-                                        }
+                                        webContentHeight = heightPx.dp + 32.dp  // small bottom padding
                                     }
                                 }
                             }
