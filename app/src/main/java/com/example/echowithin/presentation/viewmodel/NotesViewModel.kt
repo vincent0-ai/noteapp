@@ -887,21 +887,33 @@ class NotesViewModel(
     fun setSortOrder(order: String) {
         com.example.echowithin.data.local.PreferencesManager.sortOrder = order
         uiState = uiState.copy(sortOrder = order)
-        // Re-sort current notes
-        val sorted = sortAndFilterNotes(repository.getLocalNotes())
-        uiState = uiState.copy(notes = sorted)
+        // Re-sort current notes off the main thread
+        viewModelScope.launch {
+            val sorted = withContext(Dispatchers.IO) {
+                sortAndFilterNotes(repository.getLocalNotes())
+            }
+            uiState = uiState.copy(notes = sorted)
+        }
     }
 
     fun setFilterTag(tag: String?) {
         uiState = uiState.copy(filterTag = tag)
-        val sorted = sortAndFilterNotes(repository.getLocalNotes())
-        uiState = uiState.copy(notes = sorted)
+        viewModelScope.launch {
+            val sorted = withContext(Dispatchers.IO) {
+                sortAndFilterNotes(repository.getLocalNotes())
+            }
+            uiState = uiState.copy(notes = sorted)
+        }
     }
 
     fun setFilterFolder(folder: String?) {
         uiState = uiState.copy(filterFolder = folder)
-        val sorted = sortAndFilterNotes(repository.getLocalNotes())
-        uiState = uiState.copy(notes = sorted)
+        viewModelScope.launch {
+            val sorted = withContext(Dispatchers.IO) {
+                sortAndFilterNotes(repository.getLocalNotes())
+            }
+            uiState = uiState.copy(notes = sorted)
+        }
     }
 
     fun loadFolders() {

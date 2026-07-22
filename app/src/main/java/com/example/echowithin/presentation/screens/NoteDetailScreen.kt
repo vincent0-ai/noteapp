@@ -1,6 +1,11 @@
 package com.example.echowithin.presentation.screens
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -338,13 +343,61 @@ fun NoteDetailScreen(
                 }
             }
         } else if (isLoading) {
-            Box(
+            // Shimmer skeleton that mirrors the real note layout
+            val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
+            val shimmerAlpha by shimmerTransition.animateFloat(
+                initialValue = 0.15f,
+                targetValue = 0.4f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 800),
+                    repeatMode = RepeatMode.Reverse
+                ),
+                label = "shimmerAlpha"
+            )
+            val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = shimmerAlpha)
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
+                    .padding(innerPadding)
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                // Title placeholder
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .height(24.dp)
+                        .background(shimmerColor, RoundedCornerShape(6.dp))
+                )
+                // Date placeholder
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(0.35f)
+                        .height(14.dp)
+                        .background(shimmerColor, RoundedCornerShape(4.dp))
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                // Body line placeholders
+                repeat(8) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(if (it == 7) 0.5f else 1f)
+                            .height(14.dp)
+                            .background(shimmerColor, RoundedCornerShape(4.dp))
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                // Tags row placeholder
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    repeat(3) {
+                        Box(
+                            modifier = Modifier
+                                .width(60.dp)
+                                .height(24.dp)
+                                .background(shimmerColor, RoundedCornerShape(12.dp))
+                        )
+                    }
+                }
             }
         } else if (errorMessage != null) {
             Box(

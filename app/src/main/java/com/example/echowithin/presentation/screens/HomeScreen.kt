@@ -150,7 +150,9 @@ fun HomeScreen(
     
     var activeTab by remember { mutableStateOf(availableTabs.first()) }
     // If current tab becomes unavailable (e.g., went offline while on Activity), switch to Notes
-    if (activeTab !in availableTabs) activeTab = availableTabs.first()
+    LaunchedEffect(activeTab, availableTabs) {
+        if (activeTab !in availableTabs) activeTab = availableTabs.first()
+    }
 
     // Memoize filtered lists to avoid creating new List instances on every recomposition
     val unlockedNotes = remember(notes) { notes.filter { !it.isLocked } }
@@ -158,7 +160,7 @@ fun HomeScreen(
 
     // ── Batch Selection State ──
     var selectedNoteIds by remember { mutableStateOf(setOf<String>()) }
-    val isSelectionMode = selectedNoteIds.isNotEmpty()
+    val isSelectionMode by remember { derivedStateOf { selectedNoteIds.isNotEmpty() } }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
@@ -1716,7 +1718,7 @@ fun NoteCard(
         val lines = strippedContent.lineSequence().toList()
         if (lines.size <= 1) strippedContent else lines.drop(1).joinToString(" ").trim()
     }
-    val relativeTime = formatRelativeTime(note.updatedAt)
+    val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
     val selectionBgColor = if (isSelected) {
         MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)

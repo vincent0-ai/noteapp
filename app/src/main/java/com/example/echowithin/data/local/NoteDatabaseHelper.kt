@@ -27,7 +27,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
-        private const val DATABASE_VERSION = 4
+        private const val DATABASE_VERSION = 5
 
         const val TABLE_NOTES = "notes"
         const val COLUMN_ID = "id"
@@ -72,6 +72,12 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             )
         """.trimIndent()
         db.execSQL(createTable)
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON $TABLE_NOTES ($COLUMN_UPDATED_AT)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_pinned_updated ON $TABLE_NOTES ($COLUMN_IS_PINNED, $COLUMN_UPDATED_AT)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_pending_op ON $TABLE_NOTES ($COLUMN_PENDING_OP)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_trashed ON $TABLE_NOTES ($COLUMN_IS_TRASHED)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_folder ON $TABLE_NOTES ($COLUMN_FOLDER)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_synced ON $TABLE_NOTES ($COLUMN_IS_SYNCED)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -91,6 +97,15 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_TRASHED_AT TEXT")
                 db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_FOLDER TEXT")
                 currentVersion = 4
+            }
+            if (currentVersion < 5) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON $TABLE_NOTES ($COLUMN_UPDATED_AT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_pinned_updated ON $TABLE_NOTES ($COLUMN_IS_PINNED, $COLUMN_UPDATED_AT)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_pending_op ON $TABLE_NOTES ($COLUMN_PENDING_OP)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_trashed ON $TABLE_NOTES ($COLUMN_IS_TRASHED)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_folder ON $TABLE_NOTES ($COLUMN_FOLDER)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_synced ON $TABLE_NOTES ($COLUMN_IS_SYNCED)")
+                currentVersion = 5
             }
         } catch (e: Exception) {
             e.printStackTrace()

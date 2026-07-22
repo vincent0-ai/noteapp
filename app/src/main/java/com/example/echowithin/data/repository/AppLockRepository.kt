@@ -17,6 +17,19 @@ class AppLockRepository {
 
     suspend fun setupLock(pin: String): Result<Unit> {
         val hash = pin.sha256()
+        val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+        if (!hasToken) {
+            // Guest / offline mode: skip the network call entirely.
+            // SECURITY: Block overwriting an existing PIN without server verification.
+            if (SessionManager.localPinConfigured) {
+                return Result.failure(IllegalStateException("Cannot change PIN while offline. Please connect to the internet."))
+            }
+            // First-time local-only PIN setup
+            SessionManager.localPinHash = hash
+            SessionManager.localHasPin = true
+            SessionManager.localPinConfigured = true
+            return Result.success(Unit)
+        }
         return runCatching {
             val response = api.setupAppLock(AppLockSetupDto(pin = pin))
             if (!response.success) {
@@ -27,9 +40,9 @@ class AppLockRepository {
             SessionManager.localHasPin = true
             SessionManager.localPinConfigured = true
         }.recover { exception ->
-            if (exception is java.io.IOException) {
-                // SECURITY: Block offline PIN setup if a PIN was previously configured.
-                // This prevents an attacker from overwriting the existing PIN while offline.
+            if (exception is java.io.IOException || exception is retrofit2.HttpException) {
+                // Network error or server rejection (e.g. 401 in a stale session):
+                // fall back to local-only setup if no PIN was previously configured.
                 if (SessionManager.localPinConfigured) {
                     throw IllegalStateException("Cannot change PIN while offline. Please connect to the internet.")
                 }
