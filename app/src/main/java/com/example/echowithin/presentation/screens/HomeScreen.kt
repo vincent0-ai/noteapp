@@ -6,11 +6,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -162,6 +165,13 @@ fun HomeScreen(
     var selectedNoteIds by remember { mutableStateOf(setOf<String>()) }
     val isSelectionMode by remember { derivedStateOf { selectedNoteIds.isNotEmpty() } }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
+
+    // Remembered LazyListStates keep each tab's scroll position when switching
+    // tabs or navigating to a note and back, instead of snapping to the top.
+    val notesListState = rememberSaveable(saver = LazyListState.Saver, key = "notes_tab_scroll") { LazyListState() }
+    val lockedListState = rememberSaveable(saver = LazyListState.Saver, key = "locked_tab_scroll") { LazyListState() }
+    val activityListState = rememberSaveable(saver = LazyListState.Saver, key = "activity_tab_scroll") { LazyListState() }
+    val sharedListState = rememberSaveable(saver = LazyListState.Saver, key = "shared_tab_scroll") { LazyListState() }
 
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -631,7 +641,8 @@ fun HomeScreen(
                             onStartSelection = { noteId ->
                                 selectedNoteIds = setOf(noteId)
                             },
-                            isSelectionMode = isSelectionMode
+                            isSelectionMode = isSelectionMode,
+                            listState = notesListState
                         )
                     }
                 }
@@ -645,7 +656,8 @@ fun HomeScreen(
                     onSetupPin = onSetupPin,
                     onNoteClick = onNoteClick,
                     onSyncNoteClick = onSyncNoteClick,
-                    onBiometricUnlock = onBiometricUnlock
+                    onBiometricUnlock = onBiometricUnlock,
+                    listState = lockedListState
                 )
                 HomeTab.ACTIVITY -> if (HomeTab.ACTIVITY in availableTabs) ActivityTabContent(
                     proposals = proposals,
@@ -655,7 +667,8 @@ fun HomeScreen(
                     onApproveProposal = onApproveProposal,
                     onRejectProposal = onRejectProposal,
                     onMarkAllRead = onMarkAllRead,
-                    markingAllRead = markingAllRead
+                    markingAllRead = markingAllRead,
+                    listState = activityListState
                 ) else NotesTabContent(
                     notes = unlockedNotes,
                     isLoading = isLoading,
@@ -668,7 +681,8 @@ fun HomeScreen(
                     activeShares = activeShares,
                     sharesLoading = sharesLoading,
                     onManageShares = onManageShares,
-                    onOpenShareLink = onOpenShareLink
+                    onOpenShareLink = onOpenShareLink,
+                    listState = sharedListState
                 ) else NotesTabContent(
                     notes = unlockedNotes,
                     isLoading = isLoading,
@@ -695,13 +709,15 @@ private fun NotesTabContent(
     selectedNoteIds: Set<String> = emptySet(),
     onToggleSelection: (String) -> Unit = {},
     onStartSelection: (String) -> Unit = {},
-    isSelectionMode: Boolean = false
+    isSelectionMode: Boolean = false,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val haptic = LocalHapticFeedback.current
     when {
         isLoading && notes.isEmpty() -> {
             val brush = shimmerBrush()
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
@@ -759,6 +775,7 @@ private fun NotesTabContent(
         }
         else -> {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
@@ -803,7 +820,8 @@ private fun LockedTabContent(
     onSetupPin: (String) -> Unit,
     onNoteClick: (String) -> Unit,
     onSyncNoteClick: (String) -> Unit,
-    onBiometricUnlock: () -> Unit = {}
+    onBiometricUnlock: () -> Unit = {},
+    listState: LazyListState = rememberLazyListState()
 ) {
     if (!hasPin) {
         // No PIN set up — check if we're offline with a previously configured PIN
@@ -1050,6 +1068,7 @@ private fun LockedTabContent(
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(0.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
@@ -1078,7 +1097,8 @@ private fun ActivityTabContent(
     onApproveProposal: (String, String, Boolean) -> Unit,
     onRejectProposal: (String, String) -> Unit,
     onMarkAllRead: () -> Unit,
-    markingAllRead: Boolean = false
+    markingAllRead: Boolean = false,
+    listState: LazyListState = rememberLazyListState()
 ) {
     val hasContent = proposals.isNotEmpty() || notifications.isNotEmpty()
 
@@ -1112,6 +1132,7 @@ private fun ActivityTabContent(
         }
         else -> {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)
@@ -1435,7 +1456,8 @@ private fun SharedLinksTabContent(
     activeShares: List<Pair<AppNote, List<ShareDto>>>,
     sharesLoading: Boolean,
     onManageShares: (String) -> Unit,
-    onOpenShareLink: (String) -> Unit
+    onOpenShareLink: (String) -> Unit,
+    listState: LazyListState = rememberLazyListState()
 ) {
     when {
         sharesLoading -> {
@@ -1458,6 +1480,7 @@ private fun SharedLinksTabContent(
         }
         else -> {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
                 contentPadding = PaddingValues(top = 8.dp, bottom = 24.dp)

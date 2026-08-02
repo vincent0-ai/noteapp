@@ -670,10 +670,15 @@ class NotesViewModel(
      * they are NOT picked up by the sync pipeline until the user
      * explicitly taps Save (which calls editNote/createNote with
      * proper sync flags).
+     *
+     * [onDraftId] is invoked with the stable id of the saved draft so the
+     * editor can keep autosaving a brand-new note to the SAME row instead
+     * of creating a fresh draft on every keystroke.
      */
-    fun saveDraft(noteId: String?, content: String, reference: String, tags: List<String>) {
+    fun saveDraft(noteId: String?, content: String, reference: String, tags: List<String>, onDraftId: ((String) -> Unit)? = null) {
         viewModelScope.launch {
             repository.saveDraftLocally(noteId, content, reference, tags)
+                .onSuccess { id -> onDraftId?.invoke(id) }
             loadNotes(silent = true)
         }
     }

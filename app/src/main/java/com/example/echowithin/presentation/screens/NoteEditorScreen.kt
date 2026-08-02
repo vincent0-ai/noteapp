@@ -11,10 +11,13 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -48,6 +51,10 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
 
 // Pre-compiled regex for markdown preview rendering
 private val HEADING_REGEX_EDITOR = Regex("^(#+)\\s+(.*)$")
@@ -103,8 +110,9 @@ fun NoteEditorScreen(
     initialNote: AppNote?,
     isSaving: Boolean,
     onBack: () -> Unit,
-    onSave: (content: String, reference: String, tags: List<String>) -> Unit,
-    onSaveDraft: (content: String, reference: String, tags: List<String>) -> Unit = onSave,
+    onSave: (targetId: String?, content: String, reference: String, tags: List<String>) -> Unit,
+    onSaveDraft: (targetId: String?, content: String, reference: String, tags: List<String>, onDraftId: ((String) -> Unit)?) -> Unit =
+        { targetId, content, reference, tags, _ -> onSave(targetId, content, reference, tags) },
     // Lock integration
     isLocked: Boolean,
     lockError: String?,
@@ -132,19 +140,99 @@ fun NoteEditorScreen(
         if (content.isBlank()) 0 else content.trim().split("\\s+".toRegex()).size
     }
 
+    val hasRealChanges = content != initialContent ||
+        reference != initialReference ||
+        tags != initialTags
+
+    // Stable row id to write drafts to. For an existing note this is simply the
+    // note's own id. For a brand-new note it starts as null and the first
+    // autosave creates the draft row once, then reuses the returned id so we
+    // never accumulate duplicate drafts for a single typing session.
+    var draftId by remember { mutableStateOf(noteId) }
+
+    // Last values that were durably written to the DB (by autosave, Done, or
+    // back). Used to skip redundant autosaves and to stop a pending autosave
+    // from clobbering the sync flags of a note the user just explicitly saved.
+    var lastSavedContent by remember { mutableStateOf(initialContent) }
+    var lastSavedReference by remember { mutableStateOf(initialReference) }
+    var lastSavedTags by remember { mutableStateOf(initialTags) }
+
+    val lockedNoteBlockingEditor = initialNote?.isLocked == true && isLocked
+
+    // Debounced autosave: persist to the local DB a moment after the user stops
+    // typing so a crash, process death, or app-switch never loses typed content.
+    // The effect restarts whenever the text/tags change; a quick re-check after
+    // the debounce window skips saves already represented on disk.
+    LaunchedEffect(content, reference, tags) {
+        if (lockedNoteBlockingEditor) return@LaunchedEffect
+        if (isSaving) return@LaunchedEffect
+        if (content == lastSavedContent &&
+            reference == lastSavedReference &&
+            tags == lastSavedTags
+        ) return@LaunchedEffect
+        delay(1200)
+        if (lockedNoteBlockingEditor) return@LaunchedEffect
+        if (isSaving) return@LaunchedEffect
+        if (content == lastSavedContent &&
+            reference == lastSavedReference &&
+            tags == lastSavedTags
+        ) return@LaunchedEffect
+        onSaveDraft(
+            draftId,
+            content,
+            reference,
+            tags.split(',').map { it.trim() }.filter { it.isNotBlank() }
+        ) { id -> if (noteId == null) draftId = id }
+        lastSavedContent = content
+        lastSavedReference = reference
+        lastSavedTags = tags
+    }
+
+    // Save immediately when the app goes to the background so a backgrounded
+    // (then killed) process still keeps the latest keystrokes.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val currentContent by rememberUpdatedState(content)
+    val currentReference by rememberUpdatedState(reference)
+    val currentTags by rememberUpdatedState(tags)
+    val currentDraftId by rememberUpdatedState(draftId)
+    val currentIsSaving by rememberUpdatedState(isSaving)
+    val currentHasRealChanges by rememberUpdatedState(hasRealChanges)
+    val currentBlocked by rememberUpdatedState(lockedNoteBlockingEditor)
+    val currentSaveDraft by rememberUpdatedState(onSaveDraft)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP &&
+                !currentBlocked && currentHasRealChanges &&
+                currentContent.isNotBlank() && !currentIsSaving
+            ) {
+                currentSaveDraft(
+                    currentDraftId,
+                    currentContent,
+                    currentReference,
+                    currentTags.split(',').map { it.trim() }.filter { it.isNotBlank() },
+                    null
+                )
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     // Auto-save draft on back: saves locally without triggering server sync.
     // The onSaveDraft callback handles the local DB save; we call onBack()
     // ourselves because onSaveDraft does NOT navigate (unlike onSave which
     // pops the back stack via its onDone callback).
     val autoSaveOnBack = {
-        val hasRealChanges = content != initialContent ||
-            reference != initialReference ||
-            tags != initialTags
         if (hasRealChanges && content.isNotBlank() && !isSaving) {
+            lastSavedContent = content
+            lastSavedReference = reference
+            lastSavedTags = tags
             onSaveDraft(
+                draftId,
                 content,
                 reference,
-                tags.split(',').map { it.trim() }.filter { it.isNotBlank() }
+                tags.split(',').map { it.trim() }.filter { it.isNotBlank() },
+                null
             )
         }
         onBack()
@@ -169,7 +257,11 @@ fun NoteEditorScreen(
                 actions = {
                     IconButton(
                         onClick = {
+                            lastSavedContent = content
+                            lastSavedReference = reference
+                            lastSavedTags = tags
                             onSave(
+                                draftId,
                                 content,
                                 reference,
                                 tags.split(',').map { it.trim() }.filter { it.isNotBlank() }

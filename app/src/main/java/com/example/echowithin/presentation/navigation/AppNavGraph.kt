@@ -434,20 +434,20 @@ fun AppNavGraph(
                 initialNote = noteId?.let(notesViewModel::getNoteById),
                 isSaving = notesViewModel.uiState.isLoading,
                 onBack = { navController.popBackStack() },
-                onSave = { content, reference, tags ->
-                    if (noteId == null) {
+                onSave = { targetId, content, reference, tags ->
+                    if (targetId == null) {
                         notesViewModel.createNote(content, reference, tags) {
                             navController.popBackStack()
                         }
                     } else {
-                        notesViewModel.editNote(noteId, content, reference, tags) {
+                        notesViewModel.editNote(targetId, content, reference, tags) {
                             navController.popBackStack()
                         }
                     }
                 },
-                onSaveDraft = { content, reference, tags ->
+                onSaveDraft = { targetId, content, reference, tags, onDraftId ->
                     // Save locally as draft — fire-and-forget, no navigation
-                    notesViewModel.saveDraft(noteId, content, reference, tags)
+                    notesViewModel.saveDraft(targetId, content, reference, tags, onDraftId)
                 },
                 isLocked = appLockViewModel.uiState.isLocked,
                 lockError = appLockViewModel.uiState.error,
