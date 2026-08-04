@@ -616,7 +616,10 @@ fun AppNavGraph(
                 downloadProgress = notesViewModel.uiState.downloadProgress,
                 onConfirmUpdate = { notesViewModel.downloadAndInstallUpdate(context, notesViewModel.uiState.updateInfo?.apkUrl ?: "") },
                 onDismissUpdate = { notesViewModel.dismissUpdate() },
-                onSortOrderChanged = { notesViewModel.setSortOrder(it) }
+                onSortOrderChanged = { notesViewModel.setSortOrder(it) },
+                onVerifyBiometricPin = { pin, onResult ->
+                    appLockViewModel.verifyForConfirmation(pin, onResult)
+                }
             )
         }
     }

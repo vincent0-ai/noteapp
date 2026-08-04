@@ -61,6 +61,16 @@ class AppLockViewModel(
         }
     }
 
+    /** Verify a PIN without unlocking the app. Used to require PIN
+     *  confirmation before enabling biometric unlock in Settings. */
+    fun verifyForConfirmation(pin: String, onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            repository.verifyLock(pin)
+                .onSuccess { onResult(true) }
+                .onFailure { onResult(false) }
+        }
+    }
+
     fun remove(pin: String) {
         if (pin.length != 4) {
             uiState = uiState.copy(error = "Enter your current 4-digit PIN to remove protection.")

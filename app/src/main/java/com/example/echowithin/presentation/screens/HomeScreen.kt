@@ -151,7 +151,7 @@ fun HomeScreen(
         else HomeTab.entries.toList()
     }
     
-    var activeTab by remember { mutableStateOf(availableTabs.first()) }
+    var activeTab by rememberSaveable { mutableStateOf(availableTabs.first()) }
     // If current tab becomes unavailable (e.g., went offline while on Activity), switch to Notes
     LaunchedEffect(activeTab, availableTabs) {
         if (activeTab !in availableTabs) activeTab = availableTabs.first()

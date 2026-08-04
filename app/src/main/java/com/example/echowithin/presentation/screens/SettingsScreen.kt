@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -13,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import androidx.compose.material.icons.Icons
@@ -44,6 +47,7 @@ fun SettingsScreen(
     onConfirmUpdate: () -> Unit,
     onDismissUpdate: () -> Unit,
     onSortOrderChanged: (String) -> Unit = {},
+    onVerifyBiometricPin: (String, (Boolean) -> Unit) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val isLoggedIn = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
@@ -231,6 +235,10 @@ fun SettingsScreen(
                     com.example.echowithin.data.local.BiometricHelper.canAuthenticate(biometricContext)
                 }
                 var biometricEnabled by remember { mutableStateOf(PreferencesManager.biometricEnabled) }
+                var showBiometricPinDialog by remember { mutableStateOf(false) }
+                var biometricPin by remember { mutableStateOf("") }
+                var biometricPinError by remember { mutableStateOf<String?>(null) }
+                var biometricVerifying by remember { mutableStateOf(false) }
 
                 Column {
                     SettingsRowItem(
@@ -269,9 +277,17 @@ fun SettingsScreen(
                             }
                             Switch(
                                 checked = biometricEnabled,
-                                onCheckedChange = {
-                                    biometricEnabled = it
-                                    PreferencesManager.biometricEnabled = it
+                                onCheckedChange = { checked ->
+                                    if (checked) {
+                                        // Require the PIN to be re-entered and
+                                        // verified before enabling biometric unlock.
+                                        biometricPin = ""
+                                        biometricPinError = null
+                                        showBiometricPinDialog = true
+                                    } else {
+                                        biometricEnabled = false
+                                        PreferencesManager.biometricEnabled = false
+                                    }
                                 },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = BrandOrange,
@@ -280,6 +296,94 @@ fun SettingsScreen(
                             )
                         }
                     }
+                }
+
+                if (showBiometricPinDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            if (!biometricVerifying) showBiometricPinDialog = false
+                        },
+                        title = {
+                            Text("Confirm PIN", color = MaterialTheme.colorScheme.onSurface)
+                        },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text(
+                                    text = "Enter your app lock PIN to enable biometric unlock.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                OutlinedTextField(
+                                    value = biometricPin,
+                                    onValueChange = {
+                                        if (it.length <= 4 && it.all { char -> char.isDigit() }) {
+                                            biometricPin = it
+                                            if (biometricPinError != null) biometricPinError = null
+                                        }
+                                    },
+                                    label = { Text("PIN") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(10.dp),
+                                    visualTransformation = PasswordVisualTransformation(),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    isError = biometricPinError != null,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = if (biometricPinError != null) ErrorRed else BrandOrange,
+                                        unfocusedBorderColor = if (biometricPinError != null) ErrorRed.copy(alpha = 0.5f)
+                                            else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                        focusedLabelColor = if (biometricPinError != null) ErrorRed else BrandOrange
+                                    )
+                                )
+                                if (biometricPinError != null) {
+                                    Text(
+                                        text = biometricPinError!!,
+                                        color = ErrorRed,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    if (biometricPin.length != 4) {
+                                        biometricPinError = "Enter your 4-digit PIN."
+                                        return@TextButton
+                                    }
+                                    biometricVerifying = true
+                                    onVerifyBiometricPin(biometricPin) { success ->
+                                        biometricVerifying = false
+                                        if (success) {
+                                            biometricEnabled = true
+                                            PreferencesManager.biometricEnabled = true
+                                            showBiometricPinDialog = false
+                                        } else {
+                                            biometricPinError = "Incorrect PIN. Please try again."
+                                        }
+                                    }
+                                },
+                                enabled = !biometricVerifying
+                            ) {
+                                if (biometricVerifying) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = BrandOrange
+                                    )
+                                } else {
+                                    Text("Enable")
+                                }
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                onClick = { showBiometricPinDialog = false },
+                                enabled = !biometricVerifying
+                            ) { Text("Cancel") }
+                        }
+                    )
                 }
             }
 
