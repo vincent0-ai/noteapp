@@ -112,6 +112,7 @@ fun HomeScreen(
     sharesLoading: Boolean,
     onManageShares: (String) -> Unit,
     onOpenShareLink: (String) -> Unit,
+    onRefreshShares: () -> Unit = {},
     // Notifications
     notifications: List<NotificationDto> = emptyList(),
     unreadNotificationsCount: Int = 0,
@@ -155,6 +156,14 @@ fun HomeScreen(
     // If current tab becomes unavailable (e.g., went offline while on Activity), switch to Notes
     LaunchedEffect(activeTab, availableTabs) {
         if (activeTab !in availableTabs) activeTab = availableTabs.first()
+    }
+
+    // Always refresh active shares when the Shared Links tab becomes visible.
+    // loadActiveShares() only runs once at app launch, so without this, shares
+    // created/revoked after startup (or an empty state observed at launch)
+    // would never appear/update until the app restarted.
+    LaunchedEffect(activeTab) {
+        if (activeTab == HomeTab.SHARED_LINKS) onRefreshShares()
     }
 
     // Memoize filtered lists to avoid creating new List instances on every recomposition

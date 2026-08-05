@@ -353,6 +353,7 @@ fun AppNavGraph(
                         context.startActivity(intent)
                     } catch (_: Exception) {}
                 },
+                onRefreshShares = { notesViewModel.loadActiveShares() },
                 // Notifications
                 notifications = notesViewModel.uiState.notifications,
                 unreadNotificationsCount = notesViewModel.uiState.unreadNotificationsCount,

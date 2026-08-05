@@ -437,61 +437,42 @@ class NotesViewModel(
                 // regress to a silent empty state.
                 val resp = com.example.echowithin.data.network.ApiClient.apiService.getActiveShares()
                 val noteById = uiState.notes.associateBy { it.id }
-                val pairs = resp.shares.mapNotNull { dto ->
-                    val note = dto.note_id?.let(noteById::get)
-                    if (note != null) {
-                        note to listOf(
-                            ShareDto(
-                                share_id = dto.share_id,
-                                permissions = dto.permissions,
-                                surprise_theme = dto.surprise_theme,
-                                use_typewriter = dto.use_typewriter,
-                                auto_approve = dto.auto_approve,
-                                created_at = dto.created_at,
-                                expires_at = dto.expires_at,
-                                has_password = dto.has_password
-                            )
+                // Every share returned by the server is surfaced as a card.
+                // When the note is in the local cache we use the real note so
+                // the card is fully interactive; otherwise we synthesize a
+                // minimal note (title/is_locked come from the server) so the
+                // user can still see and revoke the link. This guarantees we
+                // never silently drop a share just because the note isn't
+                // cached on this device.
+                val result = resp.shares.map { dto ->
+                    val localNote = dto.note_id?.let(noteById::get)
+                    val note = localNote ?: AppNote(
+                        id = dto.note_id ?: "share_${dto.share_id}",
+                        title = dto.note_title.ifBlank { "Untitled note" },
+                        content = "",
+                        reference = "",
+                        tags = emptyList(),
+                        updatedAt = dto.created_at ?: "",
+                        isLocked = dto.is_locked,
+                        isPinned = false,
+                        isSynced = true,
+                        pendingOp = "none",
+                        updateAvailable = false
+                    )
+                    note to listOf(
+                        ShareDto(
+                            share_id = dto.share_id,
+                            permissions = dto.permissions,
+                            surprise_theme = dto.surprise_theme,
+                            use_typewriter = dto.use_typewriter,
+                            auto_approve = dto.auto_approve,
+                            created_at = dto.created_at,
+                            expires_at = dto.expires_at,
+                            has_password = dto.has_password
                         )
-                    } else null
+                    )
                 }
-                if (resp.shares.isNotEmpty() && pairs.isEmpty()) {
-                    // Server returned shares but none matched a local note.
-                    // Surface them as standalone cards (synthesised note)
-                    // so the user can still see and revoke their links.
-                    // The server now returns is_locked for each share, so
-                    // the card can render the lock badge even when the
-                    // note itself isn't in the local cache.
-                    val synthetic = resp.shares.map { dto ->
-                        val title = dto.note_title.ifBlank { "Untitled note" }
-                        AppNote(
-                            id = dto.note_id ?: "share_${dto.share_id}",
-                            title = title,
-                            content = "",
-                            reference = "",
-                            tags = emptyList(),
-                            updatedAt = dto.created_at ?: "",
-                            isLocked = dto.is_locked,
-                            isPinned = false,
-                            isSynced = true,
-                            pendingOp = "none",
-                            updateAvailable = false
-                        ) to listOf(
-                            ShareDto(
-                                share_id = dto.share_id,
-                                permissions = dto.permissions,
-                                surprise_theme = dto.surprise_theme,
-                                use_typewriter = dto.use_typewriter,
-                                auto_approve = dto.auto_approve,
-                                created_at = dto.created_at,
-                                expires_at = dto.expires_at,
-                                has_password = dto.has_password
-                            )
-                        )
-                    }
-                    uiState = uiState.copy(sharesLoading = false, activeShares = synthetic)
-                } else {
-                    uiState = uiState.copy(sharesLoading = false, activeShares = pairs)
-                }
+                uiState = uiState.copy(sharesLoading = false, activeShares = result)
             } catch (e: Exception) {
                 // Fallback: per-note loop (older servers without the new
                 // endpoint). Skip local-only notes (their IDs aren't
