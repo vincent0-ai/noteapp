@@ -16,8 +16,8 @@ android {
         applicationId = "xyz.echowithin.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 38
-        versionName = "1.10.4"
+        versionCode = 40
+        versionName = "1.10.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"https://echowithin.xyz/\"")

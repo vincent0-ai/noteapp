@@ -31,12 +31,13 @@ class NotesRepository(
     }
 
     suspend fun syncNotes(): Result<Unit> = withContext(Dispatchers.IO) {
+        val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+        if (!hasToken) {
+            return@withContext Result.failure(Exception("Not logged in"))
+        }
         runCatching {
-            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
-            if (hasToken) {
-                syncMutex.withLock {
-                    syncNotesInternal()
-                }
+            syncMutex.withLock {
+                syncNotesInternal()
             }
         }
     }
@@ -138,11 +139,7 @@ class NotesRepository(
                                 try {
                                     api.toggleNotePin(response.id)
                                 } catch (_: Exception) {
-                                    dbHelper.saveNote(
-                                        note.copy(id = response.id, isSynced = false, pendingOp = "edit"),
-                                        isSynced = false,
-                                        pendingOp = "edit"
-                                    )
+                                    // Pin status sync failure is non-fatal; preserve successful note creation
                                 }
                             }
                         }
@@ -164,17 +161,13 @@ class NotesRepository(
                             )
                             pushedNoteIds.add(note.id)
                             
-                             // Sync pin status if it changed offline
+                            // Sync pin status if it changed offline
                             val serverNote = initialResponse?.notes?.find { it.id == note.id }
                             if (serverNote != null && serverNote.is_pinned != note.isPinned) {
                                 try {
                                     api.toggleNotePin(note.id)
                                 } catch (_: Exception) {
-                                    dbHelper.saveNote(
-                                        note.copy(isSynced = false, pendingOp = "edit"),
-                                        isSynced = false,
-                                        pendingOp = "edit"
-                                    )
+                                    // Pin status sync failure is non-fatal; preserve successful note edit
                                 }
                             }
                         }
@@ -192,14 +185,23 @@ class NotesRepository(
                                 serverCount--
                             } else {
                                 throw e
-                             }
+                            }
                         }
                     }
                 }
+            } catch (e: java.io.IOException) {
+                // True network connectivity loss: stop remaining batch to preserve ordering
+                e.printStackTrace()
+                break
+            } catch (e: retrofit2.HttpException) {
+                if (e.code() == 404) {
+                    // Note no longer exists on server: delete local copy
+                    dbHelper.deletePhysically(note.id)
+                } else {
+                    e.printStackTrace()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Stop syncing remaining items if network error occurs to preserve ordering
-                break
             }
         }
 
@@ -295,8 +297,10 @@ class NotesRepository(
                 .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                 .format(java.util.Date())
             
-            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
-            val pendingOp = if (!hasToken) "none" else "create"
+            // Always mark as "create" so the note is picked up by sync
+            // when the user logs in or taps Sync later — even if there's
+            // no token right now (offline/guest mode).
+            val pendingOp = "create"
             val note = AppNote(
                 id = tempId,
                 title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
@@ -321,10 +325,11 @@ class NotesRepository(
                 .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
                 .format(java.util.Date())
             
-            val hasToken = !SessionManager.token.isNullOrBlank() && SessionManager.token != "null"
+            // Always compute the correct pendingOp so the edit is picked
+            // up by sync when the user logs in or taps Sync later — even
+            // if there's no token right now (offline/guest mode).
             val existing = dbHelper.getNoteById(noteId)
-            val pendingOp = if (!hasToken) "none"
-                else if (noteId.startsWith("local_") || existing?.pendingOp == "create") "create"
+            val pendingOp = if (noteId.startsWith("local_") || existing?.pendingOp == "create") "create"
                 else "edit"
             
             val note = AppNote(

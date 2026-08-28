@@ -40,6 +40,10 @@ class SyncDuplicationTest {
             override fun clearSyncFlags() {}
             override fun clearAll() {}
             override fun clearSyncedNotes() {}
+            override fun getTrashedNotes(): List<AppNote> = emptyList()
+            override fun trashNote(id: String) {}
+            override fun restoreNote(id: String) {}
+            override fun emptyTrash() {}
         }
         val fakeApi = FakeApiService()
         val repository = NotesRepository(api = fakeApi, dbHelper = fakeDb)
@@ -103,6 +107,10 @@ class SyncDuplicationTest {
             override fun clearSyncedNotes() {
                 pendingNotes.removeAll { it.isSynced }
             }
+            override fun getTrashedNotes(): List<AppNote> = emptyList()
+            override fun trashNote(id: String) {}
+            override fun restoreNote(id: String) {}
+            override fun emptyTrash() {}
         }
 
         val fakeApi = object : FakeApiService() {
@@ -207,6 +215,13 @@ class SyncDuplicationTest {
         override suspend fun markAllPostsRead(): GenericResponse = TODO()
         override suspend fun markAllProposalsRead(): GenericResponse = TODO()
         override suspend fun dedupNotes(confirm: Boolean): DedupResponseDto = TODO()
+        override suspend fun getTrash(page: Int, perPage: Int): TrashResponse = TrashResponse(notes = emptyList())
+        override suspend fun restoreNote(noteId: String): GenericResponse = GenericResponse(success = true)
+        override suspend fun emptyTrash(): GenericResponse = GenericResponse(success = true)
+        override suspend fun getFolders(): FoldersResponse = FoldersResponse(folders = emptyList())
+        override suspend fun moveNoteToFolder(noteId: String, body: Map<String, String?>): GenericResponse = GenericResponse(success = true)
+        override suspend fun setReminder(noteId: String, body: ReminderRequest): GenericResponse = GenericResponse(success = true)
+        override suspend fun pingCollaborators(shareId: String): PingResponse = PingResponse(success = true)
     }
 
     private class FakeSharedPreferences : SharedPreferences {

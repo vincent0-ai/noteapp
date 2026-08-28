@@ -208,7 +208,17 @@ class NotesViewModel(
                     }
                 }
                 .onFailure { t ->
-                    uiState = uiState.copy(isSyncing = false, error = t.message ?: "Sync failed")
+                    uiState = uiState.copy(isSyncing = false)
+                    if (t.message == "Not logged in") {
+                        // Not an error — user is simply offline/guest.
+                        // Reload local notes without showing an error toast.
+                        loadNotes(silent = true)
+                    } else {
+                        uiState = uiState.copy(error = t.message ?: "Sync failed")
+                        if (force) {
+                            ephemeralMessage = "Sync failed: ${t.message ?: "network error"}"
+                        }
+                    }
                 }
         }
     }
@@ -619,8 +629,8 @@ class NotesViewModel(
             repository.createNote(content = content, reference = reference, tags = tags)
                 .onSuccess { id ->
                     loadNotes()
-                    // Trigger sync to push new note to server immediately
-                    triggerAutoSync()
+                    // Push new note to server immediately
+                    syncNotes(force = true)
                     onDone(id)
                 }
                 .onFailure {
@@ -635,7 +645,8 @@ class NotesViewModel(
             repository.editNote(noteId = noteId, content = content, reference = reference, tags = tags)
                 .onSuccess { _ ->
                     loadNotes()
-                    triggerAutoSync()
+                    // Push edit to server immediately
+                    syncNotes(force = true)
                     onDone()
                 }
                 .onFailure {
@@ -670,6 +681,7 @@ class NotesViewModel(
             repository.deleteNote(noteId)
                 .onSuccess {
                     loadNotes()
+                    syncNotes(force = true)
                     onDone()
                 }
                 .onFailure {
@@ -687,6 +699,7 @@ class NotesViewModel(
                     .onSuccess { deletedCount++ }
             }
             loadNotes()
+            syncNotes(force = true)
             uiState = uiState.copy(isLoading = false)
             onDone(deletedCount)
         }
