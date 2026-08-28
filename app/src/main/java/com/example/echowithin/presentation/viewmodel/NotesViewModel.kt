@@ -629,8 +629,8 @@ class NotesViewModel(
             repository.createNote(content = content, reference = reference, tags = tags)
                 .onSuccess { id ->
                     loadNotes()
-                    // Push new note to server immediately
-                    syncNotes(force = true)
+                    // Queue background sync (respects 5-min cooldown)
+                    syncNotes()
                     onDone(id)
                 }
                 .onFailure {
@@ -645,8 +645,8 @@ class NotesViewModel(
             repository.editNote(noteId = noteId, content = content, reference = reference, tags = tags)
                 .onSuccess { _ ->
                     loadNotes()
-                    // Push edit to server immediately
-                    syncNotes(force = true)
+                    // Queue background sync (respects 5-min cooldown)
+                    syncNotes()
                     onDone()
                 }
                 .onFailure {
@@ -681,7 +681,7 @@ class NotesViewModel(
             repository.deleteNote(noteId)
                 .onSuccess {
                     loadNotes()
-                    syncNotes(force = true)
+                    syncNotes()
                     onDone()
                 }
                 .onFailure {
@@ -699,7 +699,7 @@ class NotesViewModel(
                     .onSuccess { deletedCount++ }
             }
             loadNotes()
-            syncNotes(force = true)
+            syncNotes()
             uiState = uiState.copy(isLoading = false)
             onDone(deletedCount)
         }

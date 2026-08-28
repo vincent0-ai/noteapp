@@ -67,8 +67,11 @@ class NotesRepository(
         val maxServerNotes = 50
 
         // 1. Fetch current server notes to determine server count
+        var serverReachable = false
         val initialResponse = try {
-            api.getNotes(page = 1, perPage = 100)
+            val resp = api.getNotes(page = 1, perPage = 100)
+            serverReachable = true
+            resp
         } catch (_: Exception) {
             null
         }
@@ -203,6 +206,12 @@ class NotesRepository(
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+
+        // If the server was never reachable and we didn't push any notes,
+        // report failure so the UI doesn't show a false "Synced" message.
+        if (!serverReachable && pushedNoteIds.isEmpty()) {
+            throw java.io.IOException("Server unreachable")
         }
 
         // 3. Pull latest notes list from server by looping all pages
@@ -596,9 +605,11 @@ class NotesRepository(
     suspend fun toggleNotePin(noteId: String): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
             val isGuest = SessionManager.token.isNullOrBlank() || SessionManager.token == "null"
+            val isLocal = noteId.startsWith("local_")
             val local = dbHelper.getNoteById(noteId) ?: throw Exception("Note not found")
             val newPinned = !local.isPinned
-            if (isGuest) {
+            if (isGuest || isLocal) {
+                // Guest mode or local-only note: save locally, no API call
                 dbHelper.saveNote(
                     local.copy(isPinned = newPinned),
                     isSynced = false,
