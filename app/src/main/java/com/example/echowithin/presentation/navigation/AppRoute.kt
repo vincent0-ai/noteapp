@@ -7,6 +7,7 @@ object AppRoute {
     const val ConfirmEmail = "confirm_email/{email}"
     const val Home = "home"
     const val Search = "search"
+    const val Games = "games"
     const val Premium = "premium"
     const val Settings = "settings"
     const val Trash = "trash"

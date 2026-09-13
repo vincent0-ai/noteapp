@@ -75,6 +75,7 @@ data class AppNote(
     val reference: String,
     val tags: List<String>,
     val updatedAt: String,
+    val createdAt: String = "",
     val isLocked: Boolean = false,
     val isPinned: Boolean = false,
     val isSynced: Boolean = true,

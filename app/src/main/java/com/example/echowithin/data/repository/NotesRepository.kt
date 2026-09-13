@@ -11,6 +11,7 @@ import com.example.echowithin.data.model.SearchHitDto
 import com.example.echowithin.data.model.SearchResultsDto
 import com.example.echowithin.data.network.ApiClient
 import com.example.echowithin.data.network.SessionManager
+import com.example.echowithin.util.DateTimeUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -277,34 +278,18 @@ class NotesRepository(
         if (serverTime.isEmpty()) return false
         if (localTime.isEmpty()) return true
         
-        return try {
-            val serverInstant = java.time.Instant.parse(serverTime)
-            val localInstant = java.time.Instant.parse(localTime)
-            !serverInstant.isBefore(localInstant)
-        } catch (_: Exception) {
-            try {
-                val format = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
-                    timeZone = java.util.TimeZone.getTimeZone("UTC")
-                }
-                val serverDate = format.parse(serverTime)
-                val localDate = format.parse(localTime)
-                if (serverDate != null && localDate != null) {
-                    !serverDate.before(localDate)
-                } else {
-                    serverTime >= localTime
-                }
-            } catch (_: Exception) {
-                serverTime >= localTime
-            }
+        val serverInstant = DateTimeUtils.parseIsoToInstant(serverTime)
+        val localInstant = DateTimeUtils.parseIsoToInstant(localTime)
+        if (serverInstant != null && localInstant != null) {
+            return !serverInstant.isBefore(localInstant)
         }
+        return serverTime >= localTime
     }
 
     suspend fun createNote(content: String, reference: String, tags: List<String>): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val tempId = "local_" + java.util.UUID.randomUUID().toString()
-            val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .format(java.util.Date())
+            val now = DateTimeUtils.nowUtcIso()
             
             // Always mark as "create" so the note is picked up by sync
             // when the user logs in or taps Sync later — even if there's
@@ -317,6 +302,7 @@ class NotesRepository(
                 reference = reference,
                 tags = tags,
                 updatedAt = now,
+                createdAt = now,
                 isLocked = false,
                 isPinned = false,
                 isSynced = false,
@@ -330,9 +316,7 @@ class NotesRepository(
 
     suspend fun editNote(noteId: String, content: String, reference: String, tags: List<String>): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .format(java.util.Date())
+            val now = DateTimeUtils.nowUtcIso()
             
             // Always compute the correct pendingOp so the edit is picked
             // up by sync when the user logs in or taps Sync later — even
@@ -340,6 +324,7 @@ class NotesRepository(
             val existing = dbHelper.getNoteById(noteId)
             val pendingOp = if (noteId.startsWith("local_") || existing?.pendingOp == "create") "create"
                 else "edit"
+            val createdAt = existing?.createdAt?.ifBlank { now } ?: now
             
             val note = AppNote(
                 id = noteId,
@@ -348,6 +333,7 @@ class NotesRepository(
                 reference = reference,
                 tags = tags,
                 updatedAt = now,
+                createdAt = createdAt,
                 isLocked = existing?.isLocked ?: false,
                 isPinned = existing?.isPinned ?: false,
                 isSynced = false,
@@ -367,9 +353,7 @@ class NotesRepository(
 
     suspend fun saveDraftLocally(noteId: String?, content: String, reference: String, tags: List<String>): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
-            val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-                .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-                .format(java.util.Date())
+            val now = DateTimeUtils.nowUtcIso()
 
             if (noteId == null) {
                 val tempId = "local_" + java.util.UUID.randomUUID().toString()
@@ -380,6 +364,7 @@ class NotesRepository(
                     reference = reference,
                     tags = tags,
                     updatedAt = now,
+                    createdAt = now,
                     isLocked = false,
                     isPinned = false,
                     isSynced = true,
@@ -389,6 +374,7 @@ class NotesRepository(
                 tempId
             } else {
                 val existing = dbHelper.getNoteById(noteId)
+                val createdAt = existing?.createdAt?.ifBlank { now } ?: now
                 val note = AppNote(
                     id = noteId,
                     title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
@@ -396,6 +382,7 @@ class NotesRepository(
                     reference = reference,
                     tags = tags,
                     updatedAt = now,
+                    createdAt = createdAt,
                     isLocked = existing?.isLocked ?: false,
                     isPinned = existing?.isPinned ?: false,
                     isSynced = true,
@@ -523,7 +510,7 @@ class NotesRepository(
                         id = note.id,
                         content_highlighted = snippet,
                         snippet = snippet,
-                        created_at = note.updatedAt
+                        created_at = note.createdAt.ifBlank { note.updatedAt }
                     )
                 }
                 
@@ -568,6 +555,8 @@ class NotesRepository(
         if (end < content.length) result = "$result..."
         return result
     }
+
+    fun getLocalNoteById(noteId: String): AppNote? = dbHelper.getNoteById(noteId)
 
     suspend fun getNoteById(noteId: String): Result<AppNote> = withContext(Dispatchers.IO) {
         runCatching {
@@ -695,13 +684,16 @@ class NotesRepository(
     private fun NoteDto.toAppNote(isSynced: Boolean = true, pendingOp: String = "none"): AppNote {
         val titleCandidate = content.lineSequence().firstOrNull()?.trim().orEmpty()
         val title = if (titleCandidate.isBlank()) "Untitled" else titleCandidate.take(60)
+        val created = created_at ?: updated_at ?: ""
+        val updated = updated_at ?: created_at ?: ""
         return AppNote(
             id = id,
             title = title,
             content = content,
             reference = reference.orEmpty(),
             tags = tags,
-            updatedAt = updated_at ?: created_at ?: "",
+            updatedAt = updated,
+            createdAt = created,
             isLocked = is_locked,
             isPinned = is_pinned,
             isSynced = isSynced,

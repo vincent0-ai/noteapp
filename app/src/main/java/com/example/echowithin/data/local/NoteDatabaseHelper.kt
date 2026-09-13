@@ -27,7 +27,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
-        private const val DATABASE_VERSION = 5
+        private const val DATABASE_VERSION = 6
 
         const val TABLE_NOTES = "notes"
         const val COLUMN_ID = "id"
@@ -36,6 +36,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         const val COLUMN_REFERENCE = "reference"
         const val COLUMN_TAGS = "tags"
         const val COLUMN_UPDATED_AT = "updated_at"
+        const val COLUMN_CREATED_AT = "created_at"
         const val COLUMN_IS_LOCKED = "is_locked"
         const val COLUMN_IS_PINNED = "is_pinned"
         
@@ -59,6 +60,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $COLUMN_REFERENCE TEXT,
                 $COLUMN_TAGS TEXT,
                 $COLUMN_UPDATED_AT TEXT,
+                $COLUMN_CREATED_AT TEXT,
                 $COLUMN_IS_LOCKED INTEGER DEFAULT 0,
                 $COLUMN_IS_PINNED INTEGER DEFAULT 0,
                 $COLUMN_IS_SYNCED INTEGER DEFAULT 1,
@@ -73,6 +75,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         """.trimIndent()
         db.execSQL(createTable)
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON $TABLE_NOTES ($COLUMN_UPDATED_AT)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_created_at ON $TABLE_NOTES ($COLUMN_CREATED_AT)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_pinned_updated ON $TABLE_NOTES ($COLUMN_IS_PINNED, $COLUMN_UPDATED_AT)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_pending_op ON $TABLE_NOTES ($COLUMN_PENDING_OP)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_trashed ON $TABLE_NOTES ($COLUMN_IS_TRASHED)")
@@ -106,6 +109,11 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_folder ON $TABLE_NOTES ($COLUMN_FOLDER)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_synced ON $TABLE_NOTES ($COLUMN_IS_SYNCED)")
                 currentVersion = 5
+            }
+            if (currentVersion < 6) {
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_CREATED_AT TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_created_at ON $TABLE_NOTES ($COLUMN_CREATED_AT)")
+                currentVersion = 6
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -236,6 +244,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(COLUMN_REFERENCE, note.reference)
             put(COLUMN_TAGS, note.tags.joinToString(","))
             put(COLUMN_UPDATED_AT, note.updatedAt)
+            put(COLUMN_CREATED_AT, if (note.createdAt.isNotBlank()) note.createdAt else note.updatedAt)
             put(COLUMN_IS_LOCKED, if (note.isLocked) 1 else 0)
             put(COLUMN_IS_PINNED, if (note.isPinned) 1 else 0)
             put(COLUMN_IS_SYNCED, if (isSynced) 1 else 0)
@@ -400,13 +409,18 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         val trashedIdx = c.getColumnIndex(COLUMN_IS_TRASHED)
         val trashedAtIdx = c.getColumnIndex(COLUMN_TRASHED_AT)
         val folderIdx = c.getColumnIndex(COLUMN_FOLDER)
+        val createdIdx = c.getColumnIndex(COLUMN_CREATED_AT)
+        val createdAt = if (createdIdx >= 0) c.getString(createdIdx) else null
+        val updatedAt = c.getString(updatedIdx).orEmpty()
+        val finalCreatedAt = if (!createdAt.isNullOrBlank()) createdAt else updatedAt
         return AppNote(
             id = c.getString(idIdx),
             title = c.getString(titleIdx).orEmpty(),
             content = c.getString(contentIdx).orEmpty(),
             reference = c.getString(refIdx).orEmpty(),
             tags = tagsList,
-            updatedAt = c.getString(updatedIdx).orEmpty(),
+            updatedAt = updatedAt,
+            createdAt = finalCreatedAt,
             isLocked = c.getInt(lockedIdx) == 1,
             isPinned = c.getInt(pinnedIdx) == 1,
             isSynced = c.getInt(syncedIdx) == 1,

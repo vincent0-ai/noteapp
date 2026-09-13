@@ -139,12 +139,21 @@ fun NoteVersionsScreen(
                                         version.author_username == "Unknown" || version.author_username == SessionManager.username -> "You"
                                         else -> version.author_username
                                     }
-                                    Text(
-                                        text = "Modified by $displayAuthor",
-                                        style = MaterialTheme.typography.titleSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
+                                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                                        Text(
+                                            text = "Modified by $displayAuthor",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        if (!version.created_at.isNullOrBlank()) {
+                                            Text(
+                                                text = com.example.echowithin.util.DateTimeUtils.formatFullDateTime(version.created_at),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                            )
+                                        }
+                                    }
                                     if (version.shouldShowStatusBadge()) {
                                         Surface(
                                             shape = RoundedCornerShape(8.dp),

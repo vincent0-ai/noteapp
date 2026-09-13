@@ -231,7 +231,7 @@ private fun TrashNoteCard(
             // Trashed timestamp
             note.trashedAt?.let { trashedAt ->
                 Text(
-                    text = "Deleted: $trashedAt",
+                    text = "Deleted: ${com.example.echowithin.util.DateTimeUtils.formatFullDateTime(trashedAt)}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )

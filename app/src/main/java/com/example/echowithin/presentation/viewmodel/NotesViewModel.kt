@@ -463,6 +463,7 @@ class NotesViewModel(
                         reference = "",
                         tags = emptyList(),
                         updatedAt = dto.created_at ?: "",
+                        createdAt = dto.created_at ?: "",
                         isLocked = dto.is_locked,
                         isPinned = false,
                         isSynced = true,
@@ -745,7 +746,8 @@ class NotesViewModel(
         }
     }
 
-    fun getNoteById(noteId: String): AppNote? = uiState.notes.firstOrNull { it.id == noteId }
+    fun getNoteById(noteId: String): AppNote? =
+        uiState.notes.firstOrNull { it.id == noteId } ?: repository.getLocalNoteById(noteId)
 
     suspend fun getNoteFromServer(noteId: String): Result<AppNote> {
         return repository.getNoteById(noteId)
@@ -862,10 +864,10 @@ class NotesViewModel(
             "updated_asc"   -> unpinned.sortedBy { it.updatedAt }
             "title_asc"     -> unpinned.sortedBy { it.title.lowercase() }
             "title_desc"    -> unpinned.sortedByDescending { it.title.lowercase() }
-            "created_desc"  -> unpinned.sortedByDescending { it.updatedAt }
-            "created_asc"   -> unpinned.sortedBy { it.updatedAt }
-            "date_modified" -> unpinned // DB default, already sorted
-            "date_created"  -> unpinned.sortedByDescending { it.updatedAt }
+            "created_desc"  -> unpinned.sortedByDescending { it.createdAt.ifBlank { it.updatedAt } }
+            "created_asc"   -> unpinned.sortedBy { it.createdAt.ifBlank { it.updatedAt } }
+            "date_modified" -> unpinned.sortedByDescending { it.updatedAt }
+            "date_created"  -> unpinned.sortedByDescending { it.createdAt.ifBlank { it.updatedAt } }
             "title_az"      -> unpinned.sortedBy { it.title.lowercase() }
             "title_za"      -> unpinned.sortedByDescending { it.title.lowercase() }
             else -> unpinned // fallback: DB default order

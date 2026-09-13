@@ -39,6 +39,7 @@ import com.example.echowithin.data.model.ShareDto
 import com.example.echowithin.data.model.NotificationDto
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.components.ProposalReviewDialog
+import com.example.echowithin.util.DateTimeUtils
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Fingerprint
@@ -138,6 +139,7 @@ fun HomeScreen(
     // Navigation
     onSearchClick: () -> Unit,
     onTrashClick: () -> Unit = {},
+    onGamesClick: () -> Unit = {},
     onImportNotes: (List<NoteImportExportHelper.ImportedNote>) -> Unit,
     onBatchDeleteNotes: (List<String>) -> Unit,
     // Folders
@@ -476,6 +478,13 @@ fun HomeScreen(
                                     }
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Games & Arcade") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onGamesClick()
+                                    }
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Import Notes") },
                                     onClick = {
                                         menuExpanded = false
@@ -807,8 +816,7 @@ private fun NotesTabContent(
                         },
                         onSyncClick = { onSyncNoteClick(note.id) },
                         isSelected = note.id in selectedNoteIds,
-                        isSelectionMode = isSelectionMode,
-                        modifier = Modifier.animateItem()
+                        isSelectionMode = isSelectionMode
                     )
                 }
             }
@@ -1395,7 +1403,7 @@ private fun ProposalCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
-                    text = proposal.created_at?.take(10) ?: "",
+                    text = DateTimeUtils.formatDate(proposal.created_at),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
@@ -1742,13 +1750,16 @@ fun NoteCard(
     isSelectionMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val strippedContent = remember(note.content) { stripMarkdown(note.content) }
-    val previewTitle = remember(strippedContent) {
-        strippedContent.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled"
+    val previewTitle = remember(note.title, note.content) {
+        if (note.title.isNotBlank() && note.title != "Untitled") {
+            note.title
+        } else {
+            val sample = note.content.take(120)
+            extractPreviewSnippet(sample, 60).ifBlank { "Untitled" }
+        }
     }
-    val previewBody = remember(strippedContent) {
-        val lines = strippedContent.lineSequence().toList()
-        if (lines.size <= 1) strippedContent else lines.drop(1).joinToString(" ").trim()
+    val previewBody = remember(note.content) {
+        extractPreviewSnippet(note.content, 140)
     }
     val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
@@ -1949,54 +1960,8 @@ fun NoteCard(
 
 // ── Utilities ───────────────────────────────────────────────
 
-private val otaFormats = listOf(
-    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
-    java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US).apply { timeZone = java.util.TimeZone.getTimeZone("UTC") },
-    java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US),
-    java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
-)
-private val otaDisplayFormat = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
-
 private fun formatRelativeTime(timestamp: String): String {
-    if (timestamp.isBlank()) return ""
-    try {
-        var date: java.util.Date? = null
-        synchronized(otaFormats) {
-            for (format in otaFormats) {
-                try {
-                    date = format.parse(timestamp)
-                    if (date != null) break
-                } catch (_: Exception) {}
-            }
-        }
-
-        if (date == null) {
-            if (timestamp.length >= 10) return timestamp.take(10)
-            return timestamp
-        }
-
-        val diffMs = System.currentTimeMillis() - date!!.time
-        val diffSec = diffMs / 1000
-        val diffMin = diffSec / 60
-        val diffHour = diffMin / 60
-        val diffDay = diffHour / 24
-
-        return when {
-            diffMs < 0 -> "Just now"
-            diffSec < 60 -> "Just now"
-            diffMin < 60 -> "${diffMin}m ago"
-            diffHour < 24 -> "${diffHour}h ago"
-            diffDay == 1L -> "Yesterday"
-            diffDay < 7L -> "${diffDay}d ago"
-            else -> {
-                synchronized(otaDisplayFormat) {
-                    otaDisplayFormat.format(date)
-                }
-            }
-        }
-    } catch (e: Exception) {
-        return timestamp.take(10)
-    }
+    return DateTimeUtils.formatRelativeTime(timestamp)
 }
 
 /**
@@ -2030,16 +1995,72 @@ private fun stripBackslashEscapes(text: String): String {
     return sb.toString()
 }
 
+private fun extractPreviewSnippet(content: String, maxChars: Int = 140): String {
+    if (content.isBlank()) return ""
+    val sb = StringBuilder(maxChars)
+    var i = 0
+    val len = minOf(content.length, 400)
+    while (i < len && sb.length < maxChars) {
+        val c = content[i]
+        when (c) {
+            '#', '*', '_', '~', '`', '>' -> {
+                i++
+            }
+            '[' -> {
+                if (i + 4 < len && (content.startsWith("[ ] ", i) || content.startsWith("[x] ", i) || content.startsWith("[X] ", i))) {
+                    i += 4
+                } else {
+                    i++
+                }
+            }
+            ']' -> {
+                i++
+                if (i < len && content[i] == '(') {
+                    val closeParen = content.indexOf(')', i + 1)
+                    if (closeParen != -1 && closeParen < len + 50) {
+                        i = closeParen + 1
+                    }
+                }
+            }
+            '!' -> {
+                if (i + 1 < len && content[i + 1] == '[') {
+                    i += 2
+                } else {
+                    sb.append(c)
+                    i++
+                }
+            }
+            '\n', '\r' -> {
+                if (sb.isNotEmpty() && sb[sb.length - 1] != ' ') {
+                    sb.append(' ')
+                }
+                i++
+            }
+            ' ' -> {
+                if (sb.isNotEmpty() && sb[sb.length - 1] != ' ') {
+                    sb.append(' ')
+                }
+                i++
+            }
+            '\\' -> {
+                if (i + 1 < len) {
+                    sb.append(content[i + 1])
+                    i += 2
+                } else {
+                    i++
+                }
+            }
+            else -> {
+                sb.append(c)
+                i++
+            }
+        }
+    }
+    return sb.toString().trim()
+}
+
 private fun stripMarkdown(text: String): String {
-    var clean = text
-    clean = REGEX_HEADING.replace(clean, "")
-    clean = REGEX_BLOCKQUOTE.replace(clean, "")
-    clean = REGEX_LIST_ITEM.replace(clean, "")
-    clean = REGEX_FORMATTING.replace(clean, "")
-    clean = REGEX_BACKTICK.replace(clean, "")
-    clean = REGEX_LINK.replace(clean, "$1")
-    clean = REGEX_IMAGE.replace(clean, "$1")
-    return stripBackslashEscapes(clean)
+    return extractPreviewSnippet(text, text.length)
 }
 
 @Composable

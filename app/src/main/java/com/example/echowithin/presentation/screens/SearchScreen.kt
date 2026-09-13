@@ -182,7 +182,7 @@ fun SearchScreen(
                                 ) {
                                     if (hit.created_at != null) {
                                         Text(
-                                            text = "Created: ${hit.created_at.take(10)}",
+                                            text = "Created: ${com.example.echowithin.util.DateTimeUtils.formatDate(hit.created_at)}",
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                         )

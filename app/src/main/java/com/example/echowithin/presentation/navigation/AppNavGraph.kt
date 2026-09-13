@@ -399,7 +399,8 @@ fun AppNavGraph(
                 // Folders
                 folders = notesViewModel.uiState.folders,
                 filterFolder = notesViewModel.uiState.filterFolder,
-                onFilterFolder = { notesViewModel.setFilterFolder(it) }
+                onFilterFolder = { notesViewModel.setFilterFolder(it) },
+                onGamesClick = { navController.navigate(AppRoute.Games) }
             )
         }
 
@@ -567,6 +568,12 @@ fun AppNavGraph(
                 viewModel = notesViewModel,
                 isLocked = appLockViewModel.uiState.isLocked,
                 onNoteClick = { noteId -> navController.navigate(AppRoute.detail(noteId)) }
+            )
+        }
+
+        composable(AppRoute.Games) {
+            com.example.echowithin.presentation.screens.GamesScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

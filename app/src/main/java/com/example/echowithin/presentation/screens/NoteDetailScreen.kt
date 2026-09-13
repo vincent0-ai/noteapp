@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
+import com.example.echowithin.util.DateTimeUtils
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
@@ -104,9 +105,9 @@ fun NoteDetailScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val coroutineScope = rememberCoroutineScope()
-    var noteState by remember { mutableStateOf(initialNote) }
-    var isLoading by remember { mutableStateOf(initialNote == null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var noteState by remember(noteId) { mutableStateOf(initialNote) }
+    var isLoading by remember(noteId) { mutableStateOf(initialNote == null) }
+    var errorMessage by remember(noteId) { mutableStateOf<String?>(null) }
     val singleExportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri ->
@@ -504,15 +505,37 @@ fun NoteDetailScreen(
                 }
                 // Date & Metadata info row
                 note?.let {
-                    Row(
+                    val createdFormatted = remember(it.createdAt) {
+                        DateTimeUtils.formatFullDateTime(it.createdAt.ifBlank { it.updatedAt })
+                    }
+                    val updatedFormatted = remember(it.updatedAt) {
+                        DateTimeUtils.formatFullDateTime(it.updatedAt)
+                    }
+                    val updatedRelative = remember(it.updatedAt) {
+                        DateTimeUtils.formatRelativeTime(it.updatedAt)
+                    }
+
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
                     ) {
-                        Text(
-                            text = "Updated: ${it.updatedAt.take(16)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "Updated: $updatedFormatted ($updatedRelative)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = "Created: $createdFormatted",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
 
@@ -567,14 +590,38 @@ fun NoteDetailScreen(
 
                 val isDark = isSystemInDarkTheme()
                 val contentText = note?.content.orEmpty()
-                // Density for converting CSS-px → dp
-                val density = androidx.compose.ui.platform.LocalDensity.current
-                // Holds the measured HTML content height in dp
-                var webContentHeight by remember { mutableStateOf(200.dp) }
-                // Tracks what we last injected so we only re-render on real changes
-                val injected = remember { mutableStateOf("" to false) }
+                val hasComplexMath = remember(contentText) {
+                    contentText.contains("\\frac") || contentText.contains("\\sqrt") ||
+                    contentText.contains("\\begin") || contentText.contains("\\sum") ||
+                    contentText.contains("\\int") || contentText.contains("\\prod") ||
+                    contentText.contains("\\matrix") || contentText.contains("\\[")
+                }
 
-                androidx.compose.ui.viewinterop.AndroidView(
+                if (!hasComplexMath) {
+                    val primaryColor = MaterialTheme.colorScheme.onSurface
+                    val secondaryColor = MaterialTheme.colorScheme.primary
+                    val formattedMarkdown = remember(contentText, primaryColor, secondaryColor) {
+                        renderMarkdown(contentText, primaryColor, secondaryColor)
+                    }
+                    androidx.compose.foundation.text.selection.SelectionContainer {
+                        Text(
+                            text = formattedMarkdown,
+                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 14.dp)
+                        )
+                    }
+                } else {
+                    // Density for converting CSS-px → dp
+                    val density = androidx.compose.ui.platform.LocalDensity.current
+                    // Holds the measured HTML content height in dp
+                    var webContentHeight by remember { mutableStateOf(200.dp) }
+                    // Tracks what we last injected so we only re-render on real changes
+                    val injected = remember { mutableStateOf("" to false) }
+
+                    androidx.compose.ui.viewinterop.AndroidView(
                     factory = { ctx ->
                         object : android.webkit.WebView(ctx) {
                             // Let the parent Compose scroll always win
@@ -646,6 +693,7 @@ fun NoteDetailScreen(
                         .height(webContentHeight)
                         .padding(horizontal = 16.dp, vertical = 14.dp)
                 )
+                }
 
                 }  // close inner Column
 

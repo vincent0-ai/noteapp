@@ -59,6 +59,7 @@ class NoteVersionsViewModel(
                             reference = freshNote.reference.orEmpty(),
                             tags = freshNote.tags,
                             updatedAt = freshNote.updated_at ?: freshNote.created_at ?: "",
+                            createdAt = freshNote.created_at ?: freshNote.updated_at ?: "",
                             isLocked = freshNote.is_locked,
                             isPinned = freshNote.is_pinned,
                             isSynced = true,

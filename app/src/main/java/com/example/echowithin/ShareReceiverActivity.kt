@@ -57,9 +57,7 @@ class ShareReceiverActivity : ComponentActivity() {
         val db = NoteDatabaseHelper(this)
         val titleLine = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Shared Note"
         val noteId = "local_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}"
-        val now = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
-            .apply { timeZone = java.util.TimeZone.getTimeZone("UTC") }
-            .format(java.util.Date())
+        val now = com.example.echowithin.util.DateTimeUtils.nowUtcIso()
 
         val note = AppNote(
             id = noteId,
@@ -68,6 +66,7 @@ class ShareReceiverActivity : ComponentActivity() {
             reference = "",
             tags = emptyList(),
             updatedAt = now,
+            createdAt = now,
             isLocked = false,
             isPinned = false,
             isSynced = false,

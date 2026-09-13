@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.Star
 import com.example.echowithin.data.network.ApiClient
 import com.example.echowithin.data.network.NetworkMonitor
@@ -64,9 +65,9 @@ fun EchoWithinApp() {
     
     // Bottom bar tabs: offline mode hides Premium (requires server)
     val bottomTabs = if (isOfflineMode) {
-        listOf(AppRoute.Home, AppRoute.Search, AppRoute.Settings)
+        listOf(AppRoute.Home, AppRoute.Search, AppRoute.Games, AppRoute.Settings)
     } else {
-        listOf(AppRoute.Home, AppRoute.Search, AppRoute.Premium, AppRoute.Settings)
+        listOf(AppRoute.Home, AppRoute.Search, AppRoute.Games, AppRoute.Premium, AppRoute.Settings)
     }
     
     // Bottom bar is shown on the main home tabs
@@ -117,6 +118,7 @@ fun EchoWithinApp() {
                             val (icon, label, selected) = when (route) {
                                 AppRoute.Home -> Triple(Icons.Default.Home, "Home", currentRoute == AppRoute.Home)
                                 AppRoute.Search -> Triple(Icons.Default.Search, "Search", currentRoute == AppRoute.Search)
+                                AppRoute.Games -> Triple(Icons.Default.SportsEsports, "Games", currentRoute == AppRoute.Games)
                                 AppRoute.Premium -> Triple(Icons.Default.Star, "Premium", currentRoute == AppRoute.Premium)
                                 AppRoute.Settings -> Triple(Icons.Default.Settings, "Settings", currentRoute == AppRoute.Settings)
                                 else -> throw IllegalArgumentException("Unknown route: $route")
