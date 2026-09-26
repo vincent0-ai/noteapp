@@ -146,10 +146,10 @@ interface EchoWithinApiService {
     @GET("api/posts")
     suspend fun getPublicPosts(): List<PublicPostDto>
 
-    @POST("api/fcm/register")
+    @POST("api/v1/fcm/register")
     suspend fun registerFcm(@Body body: FcmTokenDto): GenericResponse
 
-    @POST("api/fcm/unregister")
+    @POST("api/v1/fcm/unregister")
     suspend fun unregisterFcm(@Body body: FcmTokenDto): GenericResponse
 
     @POST("api/v1/premium/activate")
