@@ -256,22 +256,22 @@ fun GamesScreen(
                         ArcadeGameLinkCard(
                             title = "Floppy Bird",
                             description = "Tap to flap and fly through pipe obstacles to beat your high score.",
-                            url = "https://echowithin.xyz/games/floppy_bird"
+                            url = "https://echowithin.xyz/games/floppy-bird"
                         )
                         ArcadeGameLinkCard(
                             title = "Slime Volleyball",
                             description = "Fast physics arcade volleyball with bouncy slime controls.",
-                            url = "https://echowithin.xyz/games/slime_volleyball"
+                            url = "https://echowithin.xyz/games/slime-volleyball"
                         )
                         ArcadeGameLinkCard(
                             title = "Dots and Boxes",
                             description = "Strategic line-connecting grid game to capture territory.",
-                            url = "https://echowithin.xyz/games/dots_and_boxes"
+                            url = "https://echowithin.xyz/games/dots-and-boxes"
                         )
                         ArcadeGameLinkCard(
                             title = "Ping Pong",
                             description = "Retro paddle rally game with smooth touch tracking.",
-                            url = "https://echowithin.xyz/games/ping_pong"
+                            url = "https://echowithin.xyz/games/ping-pong"
                         )
                     }
                 }
@@ -377,7 +377,7 @@ fun GamesScreen(
                         ArcadeGameLinkCard(
                             title = "Team Crossword",
                             description = "Collaborative live crossword grid with synchronized cursor tracking, partner hints, and shared solving timer.",
-                            url = "https://echowithin.xyz/games/crossword"
+                            url = "https://echowithin.xyz/games/team-crossword"
                         )
                     }
                 }
