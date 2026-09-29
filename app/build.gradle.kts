@@ -16,8 +16,8 @@ android {
         applicationId = "xyz.echowithin.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 44
-        versionName = "1.12.0"
+        versionCode = 45
+        versionName = "1.13.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"https://echowithin.xyz/\"")
@@ -64,6 +64,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
     implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.browser:browser:1.8.0")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

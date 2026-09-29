@@ -3,6 +3,8 @@ package com.example.echowithin.presentation.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.browser.customtabs.CustomTabColorSchemeParams
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -43,7 +45,28 @@ import kotlin.random.Random
 
 enum class GameCategory(val label: String) {
     ARCADE("Arcade & 1v1"),
-    PARTY("Party & Lobbies")
+    PARTY("Party & Trivia"),
+    COOP("Couples & Co-op")
+}
+
+fun launchInAppGameTab(context: Context, url: String) {
+    try {
+        val customTabsIntent = CustomTabsIntent.Builder()
+            .setShowTitle(true)
+            .setDefaultColorSchemeParams(
+                CustomTabColorSchemeParams.Builder()
+                    .setToolbarColor(android.graphics.Color.parseColor("#18191d"))
+                    .setNavigationBarColor(android.graphics.Color.parseColor("#121316"))
+                    .build()
+            )
+            .build()
+        customTabsIntent.launchUrl(context, Uri.parse(url))
+    } catch (_: Exception) {
+        try {
+            val fallback = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            context.startActivity(fallback)
+        } catch (_: Exception) {}
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -139,8 +162,7 @@ fun GamesScreen(
                                 keyboardActions = KeyboardActions(onDone = {
                                     focusManager.clearFocus()
                                     if (pinText.length == 6) {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://echowithin.xyz/games/join?pin=$pinText"))
-                                        context.startActivity(intent)
+                                        launchInAppGameTab(context, "https://echowithin.xyz/games/join?pin=$pinText")
                                     }
                                 })
                             )
@@ -148,8 +170,7 @@ fun GamesScreen(
                                 onClick = {
                                     focusManager.clearFocus()
                                     if (pinText.length == 6) {
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://echowithin.xyz/games/join?pin=$pinText"))
-                                        context.startActivity(intent)
+                                        launchInAppGameTab(context, "https://echowithin.xyz/games/join?pin=$pinText")
                                     }
                                 },
                                 enabled = pinText.length == 6,
@@ -272,8 +293,7 @@ fun GamesScreen(
                         )
                         TextButton(
                             onClick = {
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://echowithin.xyz/games/create"))
-                                context.startActivity(intent)
+                                launchInAppGameTab(context, "https://echowithin.xyz/games/create")
                             }
                         ) {
                             Text("+ Host Room", color = BrandOrange, fontWeight = FontWeight.Bold)
@@ -312,6 +332,52 @@ fun GamesScreen(
                             badge = "Creative",
                             description = "Chain-writing where players take turns adding one sentence to craft humorous stories.",
                             createType = "story"
+                        )
+                        PartyRoomCard(
+                            title = "Caption This",
+                            badge = "Creativity",
+                            description = "Share quirky scenarios or prompts and vote on who writes the funniest, cleverest one-liner caption.",
+                            createType = "caption"
+                        )
+                    }
+                }
+            }
+
+            // Couples & Co-op Category Content
+            if (selectedCategory == GameCategory.COOP) {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Couples & Co-op Games",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        TextButton(
+                            onClick = {
+                                launchInAppGameTab(context, "https://echowithin.xyz/games/create?type=duet")
+                            }
+                        ) {
+                            Text("+ Host Duo", color = BrandOrange, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ArcadeGameLinkCard(
+                            title = "Word Bond: Duet",
+                            description = "Two-player cooperative word deduction puzzle. Give one-word clues to contact all partner words without striking the assassin.",
+                            url = "https://echowithin.xyz/games/word-duet"
+                        )
+                        ArcadeGameLinkCard(
+                            title = "Team Crossword",
+                            description = "Collaborative live crossword grid with synchronized cursor tracking, partner hints, and shared solving timer.",
+                            url = "https://echowithin.xyz/games/crossword"
                         )
                     }
                 }
@@ -1294,8 +1360,7 @@ fun ArcadeGameLinkCard(
             Spacer(modifier = Modifier.width(12.dp))
             OutlinedButton(
                 onClick = {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    context.startActivity(intent)
+                    launchInAppGameTab(context, url)
                 },
                 shape = RoundedCornerShape(8.dp),
                 border = BorderStroke(1.dp, BrandOrange)
@@ -1348,8 +1413,7 @@ fun PartyRoomCard(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Button(
                     onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://echowithin.xyz/games/create?type=$createType"))
-                        context.startActivity(intent)
+                        launchInAppGameTab(context, "https://echowithin.xyz/games/create?type=$createType")
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
