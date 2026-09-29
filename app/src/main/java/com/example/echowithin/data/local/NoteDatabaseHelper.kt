@@ -21,13 +21,16 @@ interface NoteDbHelper {
     fun trashNote(id: String)
     fun restoreNote(id: String)
     fun emptyTrash()
+    fun updateReminder(id: String, reminderAt: String?)
+    fun updateColorTag(id: String, colorTag: String)
+    fun getNotesWithActiveReminders(): List<AppNote>
 }
 
 class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION), NoteDbHelper {
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
-        private const val DATABASE_VERSION = 6
+        private const val DATABASE_VERSION = 7
 
         const val TABLE_NOTES = "notes"
         const val COLUMN_ID = "id"
@@ -49,6 +52,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         const val COLUMN_IS_TRASHED = "is_trashed"
         const val COLUMN_TRASHED_AT = "trashed_at"
         const val COLUMN_FOLDER = "folder"
+        const val COLUMN_REMINDER_AT = "reminder_at"
+        const val COLUMN_COLOR_TAG = "color_tag"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -70,7 +75,9 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $COLUMN_SOURCE_SHARE_ID TEXT,
                 $COLUMN_IS_TRASHED INTEGER DEFAULT 0,
                 $COLUMN_TRASHED_AT TEXT,
-                $COLUMN_FOLDER TEXT
+                $COLUMN_FOLDER TEXT,
+                $COLUMN_REMINDER_AT TEXT,
+                $COLUMN_COLOR_TAG TEXT DEFAULT 'default'
             )
         """.trimIndent()
         db.execSQL(createTable)
@@ -81,6 +88,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_trashed ON $TABLE_NOTES ($COLUMN_IS_TRASHED)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_folder ON $TABLE_NOTES ($COLUMN_FOLDER)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_synced ON $TABLE_NOTES ($COLUMN_IS_SYNCED)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_reminder ON $TABLE_NOTES ($COLUMN_REMINDER_AT)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -114,6 +122,12 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_CREATED_AT TEXT")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_created_at ON $TABLE_NOTES ($COLUMN_CREATED_AT)")
                 currentVersion = 6
+            }
+            if (currentVersion < 7) {
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_REMINDER_AT TEXT")
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_COLOR_TAG TEXT DEFAULT 'default'")
+                db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_reminder ON $TABLE_NOTES ($COLUMN_REMINDER_AT)")
+                currentVersion = 7
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -255,6 +269,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(COLUMN_IS_TRASHED, if (note.isTrashed) 1 else 0)
             put(COLUMN_TRASHED_AT, note.trashedAt)
             put(COLUMN_FOLDER, note.folder)
+            put(COLUMN_REMINDER_AT, note.reminderAt)
+            put(COLUMN_COLOR_TAG, note.colorTag)
         }
         db.replace(TABLE_NOTES, null, values)
     }
@@ -393,6 +409,62 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         db.delete(TABLE_NOTES, "$COLUMN_IS_TRASHED = 1", null)
     }
 
+    override fun updateReminder(id: String, reminderAt: String?) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            if (reminderAt != null) {
+                put(COLUMN_REMINDER_AT, reminderAt)
+            } else {
+                putNull(COLUMN_REMINDER_AT)
+            }
+            put(COLUMN_IS_SYNCED, 0)
+            put(COLUMN_PENDING_OP, "edit")
+        }
+        db.update(TABLE_NOTES, values, "$COLUMN_ID = ?", arrayOf(id))
+    }
+
+    override fun updateColorTag(id: String, colorTag: String) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            put(COLUMN_COLOR_TAG, colorTag)
+            put(COLUMN_IS_SYNCED, 0)
+            put(COLUMN_PENDING_OP, "edit")
+        }
+        db.update(TABLE_NOTES, values, "$COLUMN_ID = ?", arrayOf(id))
+    }
+
+    override fun getNotesWithActiveReminders(): List<AppNote> {
+        val notes = mutableListOf<AppNote>()
+        val db = readableDatabase
+        val cursor = db.query(
+            TABLE_NOTES,
+            null,
+            "$COLUMN_REMINDER_AT IS NOT NULL AND $COLUMN_REMINDER_AT != '' AND $COLUMN_IS_TRASHED = 0 AND $COLUMN_PENDING_OP != ?",
+            arrayOf("delete"),
+            null, null,
+            "$COLUMN_REMINDER_AT ASC"
+        )
+        cursor.use { c ->
+            val idIdx = c.getColumnIndexOrThrow(COLUMN_ID)
+            val titleIdx = c.getColumnIndexOrThrow(COLUMN_TITLE)
+            val contentIdx = c.getColumnIndexOrThrow(COLUMN_CONTENT)
+            val refIdx = c.getColumnIndexOrThrow(COLUMN_REFERENCE)
+            val tagsIdx = c.getColumnIndexOrThrow(COLUMN_TAGS)
+            val updatedIdx = c.getColumnIndexOrThrow(COLUMN_UPDATED_AT)
+            val lockedIdx = c.getColumnIndexOrThrow(COLUMN_IS_LOCKED)
+            val pinnedIdx = c.getColumnIndexOrThrow(COLUMN_IS_PINNED)
+            val syncedIdx = c.getColumnIndexOrThrow(COLUMN_IS_SYNCED)
+            val opIdx = c.getColumnIndexOrThrow(COLUMN_PENDING_OP)
+            val updateAvailableIdx = c.getColumnIndexOrThrow(COLUMN_UPDATE_AVAILABLE)
+            val sourceNoteIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_NOTE_ID)
+            val sourceShareIdIdx = c.getColumnIndexOrThrow(COLUMN_SOURCE_SHARE_ID)
+            while (c.moveToNext()) {
+                notes.add(cursorToAppNote(c, idIdx, titleIdx, contentIdx, refIdx, tagsIdx, updatedIdx, lockedIdx, pinnedIdx, syncedIdx, opIdx, updateAvailableIdx, sourceNoteIdIdx, sourceShareIdIdx))
+            }
+        }
+        return notes
+    }
+
     /**
      * Shared helper to read an AppNote from a cursor row. The column indices
      * must have been obtained from the SAME cursor via getColumnIndexOrThrow.
@@ -410,9 +482,13 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         val trashedAtIdx = c.getColumnIndex(COLUMN_TRASHED_AT)
         val folderIdx = c.getColumnIndex(COLUMN_FOLDER)
         val createdIdx = c.getColumnIndex(COLUMN_CREATED_AT)
+        val reminderIdx = c.getColumnIndex(COLUMN_REMINDER_AT)
+        val colorIdx = c.getColumnIndex(COLUMN_COLOR_TAG)
         val createdAt = if (createdIdx >= 0) c.getString(createdIdx) else null
         val updatedAt = c.getString(updatedIdx).orEmpty()
         val finalCreatedAt = if (!createdAt.isNullOrBlank()) createdAt else updatedAt
+        val reminderAt = if (reminderIdx >= 0) c.getString(reminderIdx) else null
+        val colorTag = if (colorIdx >= 0) c.getString(colorIdx) ?: "default" else "default"
         return AppNote(
             id = c.getString(idIdx),
             title = c.getString(titleIdx).orEmpty(),
@@ -430,7 +506,9 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             sourceShareId = c.getString(sourceShareIdIdx),
             isTrashed = if (trashedIdx >= 0) c.getInt(trashedIdx) == 1 else false,
             trashedAt = if (trashedAtIdx >= 0) c.getString(trashedAtIdx) else null,
-            folder = if (folderIdx >= 0) c.getString(folderIdx) else null
+            folder = if (folderIdx >= 0) c.getString(folderIdx) else null,
+            reminderAt = reminderAt,
+            colorTag = colorTag
         )
     }
 }

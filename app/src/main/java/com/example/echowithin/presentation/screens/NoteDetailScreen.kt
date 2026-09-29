@@ -48,6 +48,11 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.shape.CircleShape
 import com.example.echowithin.data.repository.NoteImportExportHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -100,6 +105,9 @@ fun NoteDetailScreen(
     lockError: String?,
     lockLoading: Boolean,
     onVerifyPin: (String) -> Unit,
+    onSetReminder: ((String?) -> Unit)? = null,
+    onSetColor: ((String) -> Unit)? = null,
+    onUpdateContent: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -108,6 +116,8 @@ fun NoteDetailScreen(
     var noteState by remember(noteId) { mutableStateOf(initialNote) }
     var isLoading by remember(noteId) { mutableStateOf(initialNote == null) }
     var errorMessage by remember(noteId) { mutableStateOf<String?>(null) }
+    var showReminderDialog by remember { mutableStateOf(false) }
+    var showColorDialog by remember { mutableStateOf(false) }
     val singleExportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri ->
@@ -190,6 +200,22 @@ fun NoteDetailScreen(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
+                    IconButton(onClick = { showReminderDialog = true }) {
+                        Icon(
+                            imageVector = if (!noteState?.reminderAt.isNullOrBlank()) Icons.Default.NotificationsActive else Icons.Default.Alarm,
+                            contentDescription = "Set Reminder",
+                            tint = if (!noteState?.reminderAt.isNullOrBlank()) com.example.echowithin.ui.theme.BrandOrange
+                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
+                    IconButton(onClick = { showColorDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Palette,
+                            contentDescription = "Note Color",
+                            tint = if (noteState?.colorTag != null && noteState?.colorTag != "default") com.example.echowithin.ui.theme.NoteColorPalette.getAccentColor(noteState?.colorTag)
+                                   else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                        )
+                    }
                     var menuExpanded by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
@@ -203,6 +229,20 @@ fun NoteDetailScreen(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(if (!noteState?.reminderAt.isNullOrBlank()) "Edit Reminder" else "Set Reminder") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showReminderDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Note Color Tint") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showColorDialog = true
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text("Export as Markdown") },
                                 onClick = {
@@ -255,11 +295,15 @@ fun NoteDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = if (com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme()) != Color.Transparent)
+                        com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme())
+                    else MaterialTheme.colorScheme.background
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = if (com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme()) != Color.Transparent)
+            com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme())
+        else MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (noteState?.isLocked == true && isLocked) {
             Box(
@@ -503,6 +547,68 @@ fun NoteDetailScreen(
                         }
                     }
                 }
+
+                // Active Reminder Banner
+                if (!note?.reminderAt.isNullOrBlank()) {
+                    val reminderTime = note!!.reminderAt!!
+                    val reminderFormatted = remember(reminderTime) {
+                        DateTimeUtils.formatFullDateTime(reminderTime)
+                    }
+                    val isPast = remember(reminderTime) {
+                        try {
+                            java.time.Instant.parse(reminderTime).toEpochMilli() < System.currentTimeMillis()
+                        } catch (_: Exception) { false }
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isPast) ErrorRed.copy(alpha = 0.08f) else com.example.echowithin.ui.theme.BrandOrange.copy(alpha = 0.08f),
+                        border = BorderStroke(1.dp, if (isPast) ErrorRed.copy(alpha = 0.35f) else com.example.echowithin.ui.theme.BrandOrange.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showReminderDialog = true }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPast) Icons.Default.NotificationsActive else Icons.Default.Alarm,
+                                    contentDescription = null,
+                                    tint = if (isPast) ErrorRed else com.example.echowithin.ui.theme.BrandOrange,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Column {
+                                    Text(
+                                        text = if (isPast) "Reminder Overdue" else "Task Reminder",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = if (isPast) ErrorRed else com.example.echowithin.ui.theme.BrandOrange
+                                    )
+                                    Text(
+                                        text = reminderFormatted,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = { showReminderDialog = true },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = if (isPast) ErrorRed else com.example.echowithin.ui.theme.BrandOrange
+                                )
+                            ) {
+                                Text("Edit")
+                            }
+                        }
+                    }
+                }
+
                 // Date & Metadata info row
                 note?.let {
                     val createdFormatted = remember(it.createdAt) {
@@ -597,21 +703,54 @@ fun NoteDetailScreen(
                     contentText.contains("\\matrix") || contentText.contains("\\[")
                 }
 
+                val hasTaskItems = remember(contentText) {
+                    contentText.contains("- [ ]") || contentText.contains("- [x]") || contentText.contains("- [X]") ||
+                    contentText.contains("* [ ]") || contentText.contains("* [x]") || contentText.contains("* [X]")
+                }
+
                 if (!hasComplexMath) {
                     val primaryColor = MaterialTheme.colorScheme.onSurface
                     val secondaryColor = MaterialTheme.colorScheme.primary
-                    val formattedMarkdown = remember(contentText, primaryColor, secondaryColor) {
-                        renderMarkdown(contentText, primaryColor, secondaryColor)
-                    }
-                    androidx.compose.foundation.text.selection.SelectionContainer {
-                        Text(
-                            text = formattedMarkdown,
-                            style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp)
+
+                    if (hasTaskItems) {
+                        InteractiveTaskContent(
+                            content = contentText,
+                            primaryColor = primaryColor,
+                            secondaryColor = secondaryColor,
+                            onToggleLine = { lineIdx ->
+                                val lines = contentText.lines().toMutableList()
+                                if (lineIdx in lines.indices) {
+                                    val line = lines[lineIdx]
+                                    val prefix = line.takeWhile { it.isWhitespace() }
+                                    val trimmed = line.trimStart()
+                                    val newLine = when {
+                                        trimmed.startsWith("- [ ] ") -> prefix + "- [x] " + trimmed.substring(6)
+                                        trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ") -> prefix + "- [ ] " + trimmed.substring(6)
+                                        trimmed.startsWith("* [ ] ") -> prefix + "* [x] " + trimmed.substring(6)
+                                        trimmed.startsWith("* [x] ") || trimmed.startsWith("* [X] ") -> prefix + "* [ ] " + trimmed.substring(6)
+                                        else -> line
+                                    }
+                                    lines[lineIdx] = newLine
+                                    val newContent = lines.joinToString("\n")
+                                    noteState = noteState?.copy(content = newContent)
+                                    onUpdateContent?.invoke(newContent)
+                                }
+                            }
                         )
+                    } else {
+                        val formattedMarkdown = remember(contentText, primaryColor, secondaryColor) {
+                            renderMarkdown(contentText, primaryColor, secondaryColor)
+                        }
+                        androidx.compose.foundation.text.selection.SelectionContainer {
+                            Text(
+                                text = formattedMarkdown,
+                                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp)
+                            )
+                        }
                     }
                 } else {
                     // Density for converting CSS-px → dp
@@ -821,6 +960,32 @@ fun NoteDetailScreen(
                 TextButton(onClick = { showDeleteDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showReminderDialog) {
+        ReminderPickerDialog(
+            currentReminder = noteState?.reminderAt,
+            onDismiss = { showReminderDialog = false },
+            onSetReminder = { newReminder ->
+                noteState = noteState?.copy(reminderAt = newReminder)
+                onSetReminder?.invoke(newReminder)
+            },
+            onClearReminder = {
+                noteState = noteState?.copy(reminderAt = null)
+                onSetReminder?.invoke(null)
+            }
+        )
+    }
+
+    if (showColorDialog) {
+        ColorPickerDialog(
+            currentColor = noteState?.colorTag,
+            onDismiss = { showColorDialog = false },
+            onColorSelected = { newColor ->
+                noteState = noteState?.copy(colorTag = newColor)
+                onSetColor?.invoke(newColor)
             }
         )
     }
@@ -1221,4 +1386,286 @@ private fun ActionBarItem(
             maxLines = 1
         )
     }
+}
+
+@Composable
+fun InteractiveTaskContent(
+    content: String,
+    primaryColor: Color,
+    secondaryColor: Color,
+    onToggleLine: (Int) -> Unit
+) {
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val lines = remember(content) { content.lines() }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        lines.forEachIndexed { index, line ->
+            val trimmed = line.trimStart()
+            val isTask = trimmed.startsWith("- [ ] ") || trimmed.startsWith("- [x] ") || trimmed.startsWith("- [X] ") ||
+                    trimmed.startsWith("* [ ] ") || trimmed.startsWith("* [x] ") || trimmed.startsWith("* [X] ")
+
+            if (isTask) {
+                val isChecked = trimmed[3] == 'x' || trimmed[3] == 'X'
+                val taskContent = trimmed.substring(6)
+                val indentSpaces = line.length - trimmed.length
+                val indentPadding = (indentSpaces * 4).dp
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = indentPadding, top = 2.dp, bottom = 2.dp)
+                        .clickable {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onToggleLine(index)
+                        },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isChecked,
+                        onCheckedChange = {
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            onToggleLine(index)
+                        },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = secondaryColor,
+                            uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        ),
+                        modifier = Modifier.size(24.dp).padding(end = 6.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = taskContent,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None,
+                            color = if (isChecked) primaryColor.copy(alpha = 0.5f) else primaryColor
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            } else if (line.isNotBlank()) {
+                val formatted = remember(line, primaryColor, secondaryColor) {
+                    renderMarkdown(line, primaryColor, secondaryColor)
+                }
+                Text(
+                    text = formatted,
+                    style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
+                    color = primaryColor,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                )
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun ReminderPickerDialog(
+    currentReminder: String?,
+    onDismiss: () -> Unit,
+    onSetReminder: (String) -> Unit,
+    onClearReminder: () -> Unit
+) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(Icons.Default.Alarm, contentDescription = null, tint = com.example.echowithin.ui.theme.BrandOrange)
+                Text("Set Note Reminder")
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!currentReminder.isNullOrBlank()) {
+                    val formatted = DateTimeUtils.formatFullDateTime(currentReminder)
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Text(
+                            text = "Current: $formatted",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                Text("Quick Options", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+                // Option 1: In 1 hour
+                OutlinedButton(
+                    onClick = {
+                        val trigger = java.time.Instant.now().plusSeconds(3600).toString()
+                        onSetReminder(trigger)
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("+1 Hour from now")
+                }
+
+                // Option 2: Tonight at 8 PM
+                OutlinedButton(
+                    onClick = {
+                        val cal = java.util.Calendar.getInstance().apply {
+                            set(java.util.Calendar.HOUR_OF_DAY, 20)
+                            set(java.util.Calendar.MINUTE, 0)
+                            set(java.util.Calendar.SECOND, 0)
+                            if (timeInMillis <= System.currentTimeMillis()) {
+                                add(java.util.Calendar.DAY_OF_YEAR, 1)
+                            }
+                        }
+                        val trigger = java.time.Instant.ofEpochMilli(cal.timeInMillis).toString()
+                        onSetReminder(trigger)
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Tonight (8:00 PM)")
+                }
+
+                // Option 3: Tomorrow morning at 9 AM
+                OutlinedButton(
+                    onClick = {
+                        val cal = java.util.Calendar.getInstance().apply {
+                            add(java.util.Calendar.DAY_OF_YEAR, 1)
+                            set(java.util.Calendar.HOUR_OF_DAY, 9)
+                            set(java.util.Calendar.MINUTE, 0)
+                            set(java.util.Calendar.SECOND, 0)
+                        }
+                        val trigger = java.time.Instant.ofEpochMilli(cal.timeInMillis).toString()
+                        onSetReminder(trigger)
+                        onDismiss()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Tomorrow Morning (9:00 AM)")
+                }
+
+                // Option 4: Pick custom Date and Time
+                Button(
+                    onClick = {
+                        val now = java.util.Calendar.getInstance()
+                        android.app.DatePickerDialog(
+                            context,
+                            { _, year, month, dayOfMonth ->
+                                val selectedDate = java.util.Calendar.getInstance().apply {
+                                    set(year, month, dayOfMonth)
+                                }
+                                android.app.TimePickerDialog(
+                                    context,
+                                    { _, hourOfDay, minute ->
+                                        selectedDate.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
+                                        selectedDate.set(java.util.Calendar.MINUTE, minute)
+                                        selectedDate.set(java.util.Calendar.SECOND, 0)
+                                        if (selectedDate.timeInMillis > System.currentTimeMillis()) {
+                                            val trigger = java.time.Instant.ofEpochMilli(selectedDate.timeInMillis).toString()
+                                            onSetReminder(trigger)
+                                            onDismiss()
+                                        } else {
+                                            android.widget.Toast.makeText(context, "Please choose a time in the future", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    now.get(java.util.Calendar.HOUR_OF_DAY),
+                                    now.get(java.util.Calendar.MINUTE),
+                                    false
+                                ).show()
+                            },
+                            now.get(java.util.Calendar.YEAR),
+                            now.get(java.util.Calendar.MONTH),
+                            now.get(java.util.Calendar.DAY_OF_MONTH)
+                        ).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = com.example.echowithin.ui.theme.BrandOrange),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Choose Custom Date & Time")
+                }
+
+                if (!currentReminder.isNullOrBlank()) {
+                    TextButton(
+                        onClick = {
+                            onClearReminder()
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Clear Reminder")
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun ColorPickerDialog(
+    currentColor: String?,
+    onDismiss: () -> Unit,
+    onColorSelected: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Note Color Tint") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                com.example.echowithin.ui.theme.NoteColorPalette.options.forEach { option ->
+                    val isSelected = (currentColor ?: "default").equals(option.id, ignoreCase = true)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                onColorSelected(option.id)
+                                onDismiss()
+                            }
+                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = option.accentColor,
+                            modifier = Modifier.size(28.dp),
+                            border = BorderStroke(2.dp, if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent)
+                        ) {}
+                        Text(
+                            text = option.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (isSelected) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }

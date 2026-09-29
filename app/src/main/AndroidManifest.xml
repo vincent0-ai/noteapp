@@ -6,6 +6,10 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".EchoWithinApplication"
@@ -61,6 +65,28 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- Reminder Alarm Receiver -->
+        <receiver
+            android:name=".util.ReminderBroadcastReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.example.echowithin.ACTION_TRIGGER_REMINDER" />
+                <action android:name="com.example.echowithin.ACTION_SNOOZE_REMINDER" />
+                <action android:name="com.example.echowithin.ACTION_DISMISS_REMINDER" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Boot Completed Receiver to restore alarms on reboot -->
+        <receiver
+            android:name=".util.BootCompletedReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

@@ -48,6 +48,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.automirrored.filled.FormatListBulleted
@@ -62,7 +63,8 @@ private val BLOCKQUOTE_REGEX_EDITOR = Regex("^\\s*>\\s*(.*)")
 private val LINK_REGEX_EDITOR = Regex("\\[(.*?)\\]\\(.*?\\)")
 private val STRIKETHROUGH_REGEX_EDITOR = Regex("~~(.*?)~~")
 
-// Auto-numbering: matches bullet lists (- , * ) and ordered lists (1. , 2. )
+// Auto-numbering: matches task lists (- [ ] ), bullet lists (- , * ) and ordered lists (1. , 2. )
+private val TASK_LIST_REGEX = Regex("^(\\s*)([-*])\\s\\[([ xX])\\]\\s(.*)$")
 private val BULLET_LIST_REGEX = Regex("^(\\s*)([-*])\\s(.*)$")
 private val ORDERED_LIST_REGEX = Regex("^(\\s*)(\\d+)\\.\\s(.*)$")
 
@@ -692,6 +694,10 @@ private fun MarkdownToolbar(
             IconButton(onClick = { onInsert("- ", "") }, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.AutoMirrored.Filled.FormatListBulleted, contentDescription = "List", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
             }
+            // Task List
+            IconButton(onClick = { onInsert("- [ ] ", "") }, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.Checklist, contentDescription = "Task List", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
+            }
             // Link
             IconButton(onClick = { onInsert("[", "](url)") }, modifier = Modifier.size(40.dp)) {
                 Icon(Icons.Default.Link, contentDescription = "Link", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(20.dp))
@@ -862,6 +868,22 @@ private fun handleAutoNumbering(
     val lineEnd = cursor - 1 // position of the new '\n'
     if (lineStart > oldText.length || lineEnd > newText.length) return newValue
     val previousLine = newText.substring(lineStart, lineEnd)
+
+    // Try task list match (- [ ] item / - [x] item / * [ ] item)
+    val taskMatch = TASK_LIST_REGEX.find(previousLine)
+    if (taskMatch != null) {
+        val indent = taskMatch.groupValues[1]
+        val marker = taskMatch.groupValues[2]
+        val itemText = taskMatch.groupValues[4]
+        if (itemText.isBlank()) {
+            // Empty task item → remove the prefix (end the list)
+            val cleanedText = newText.substring(0, lineStart) + newText.substring(cursor)
+            return TextFieldValue(cleanedText, TextRange(lineStart))
+        }
+        val prefix = "$indent$marker [ ] "
+        val result = newText.substring(0, cursor) + prefix + newText.substring(cursor)
+        return TextFieldValue(result, TextRange(cursor + prefix.length))
+    }
 
     // Try bullet list match (- item / * item)
     val bulletMatch = BULLET_LIST_REGEX.find(previousLine)

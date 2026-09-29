@@ -203,11 +203,17 @@ interface EchoWithinApiService {
         @Body body: Map<String, String?>
     ): GenericResponse
 
-    // ── Reminders ──
+    // ── Reminders & Styling ──
     @POST("api/v1/notes/{noteId}/reminder")
     suspend fun setReminder(
         @Path("noteId") noteId: String,
         @Body body: ReminderRequest
+    ): GenericResponse
+
+    @POST("api/v1/notes/{noteId}/color")
+    suspend fun setColor(
+        @Path("noteId") noteId: String,
+        @Body body: ColorRequest
     ): GenericResponse
 
     // ── Shared Note Ping ──

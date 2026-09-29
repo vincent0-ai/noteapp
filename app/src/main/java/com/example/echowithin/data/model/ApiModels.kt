@@ -47,7 +47,8 @@ data class NoteDto(
     val folder: String? = null,
     val is_trashed: Boolean = false,
     val trashed_at: String? = null,
-    val reminder_at: String? = null
+    val reminder_at: String? = null,
+    val color_tag: String? = "default"
 )
 
 data class PaginationDto(
@@ -86,7 +87,8 @@ data class AppNote(
     val folder: String? = null,
     val isTrashed: Boolean = false,
     val trashedAt: String? = null,
-    val reminderAt: String? = null
+    val reminderAt: String? = null,
+    val colorTag: String = "default"
 )
 
 data class ProfileResponse(
@@ -362,6 +364,10 @@ data class FoldersResponse(
 // Reminder DTOs
 data class ReminderRequest(
     val reminder_at: String? = null
+)
+
+data class ColorRequest(
+    val color_tag: String = "default"
 )
 
 // Ping DTOs (shared note collaborator ping)

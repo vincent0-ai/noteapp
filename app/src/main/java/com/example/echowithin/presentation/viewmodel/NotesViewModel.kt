@@ -28,6 +28,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 
+enum class HomeFilter(val label: String) {
+    ALL("All"),
+    REMINDERS("Reminders"),
+    TASKS("Tasks"),
+    PINNED("Pinned")
+}
+
 @Immutable
 data class NotesUiState(
     val notes: List<AppNote> = emptyList(),
@@ -53,6 +60,7 @@ data class NotesUiState(
     val sortOrder: String = "date_modified",
     val filterTag: String? = null,
     val filterFolder: String? = null,
+    val filterType: HomeFilter = HomeFilter.ALL,
     val folders: List<String> = emptyList()
 )
 
@@ -875,6 +883,23 @@ class NotesViewModel(
 
         var result = pinned + sortedUnpinned
 
+        // Filter by HomeFilter chip
+        when (uiState.filterType) {
+            HomeFilter.ALL -> { /* show all */ }
+            HomeFilter.REMINDERS -> {
+                result = result.filter { !it.reminderAt.isNullOrBlank() }
+            }
+            HomeFilter.TASKS -> {
+                result = result.filter {
+                    it.content.contains("- [ ]") || it.content.contains("- [x]") || it.content.contains("- [X]") ||
+                    it.content.contains("* [ ]") || it.content.contains("* [x]") || it.content.contains("* [X]")
+                }
+            }
+            HomeFilter.PINNED -> {
+                result = result.filter { it.isPinned }
+            }
+        }
+
         uiState.filterTag?.let { tag ->
             result = result.filter { note -> note.tags.any { it.equals(tag, ignoreCase = true) } }
         }
@@ -883,6 +908,63 @@ class NotesViewModel(
         }
 
         return result
+    }
+
+    fun setFilterType(filter: HomeFilter) {
+        uiState = uiState.copy(filterType = filter)
+        viewModelScope.launch {
+            val sorted = withContext(Dispatchers.IO) {
+                sortAndFilterNotes(repository.getLocalNotes())
+            }
+            uiState = uiState.copy(notes = sorted)
+        }
+    }
+
+    fun setNoteReminder(context: Context, noteId: String, reminderAt: String?, onDone: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.setReminder(noteId, reminderAt)
+            if (reminderAt != null) {
+                try {
+                    val triggerMs = java.time.Instant.parse(reminderAt).toEpochMilli()
+                    val note = repository.getLocalNoteById(noteId)
+                    val title = note?.title?.ifBlank { "Task Reminder" } ?: "Task Reminder"
+                    val snippet = note?.content?.lineSequence()?.firstOrNull()?.take(80) ?: ""
+                    com.example.echowithin.util.ReminderScheduler.schedule(
+                        context = context,
+                        noteId = noteId,
+                        title = title,
+                        contentSnippet = snippet,
+                        triggerAtMillis = triggerMs
+                    )
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            } else {
+                com.example.echowithin.util.ReminderScheduler.cancel(context, noteId)
+            }
+            val all = withContext(Dispatchers.IO) { sortAndFilterNotes(repository.getLocalNotes()) }
+            uiState = uiState.copy(notes = all)
+            onDone?.invoke()
+        }
+    }
+
+    fun setNoteColor(noteId: String, colorTag: String, onDone: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            repository.setColorTag(noteId, colorTag)
+            val all = withContext(Dispatchers.IO) { sortAndFilterNotes(repository.getLocalNotes()) }
+            uiState = uiState.copy(notes = all)
+            onDone?.invoke()
+        }
+    }
+
+    fun updateNoteContentDirectly(noteId: String, newContent: String, onDone: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            val target = repository.getLocalNoteById(noteId) ?: return@launch
+            repository.editNote(noteId, newContent, target.reference, target.tags)
+            val all = withContext(Dispatchers.IO) { sortAndFilterNotes(repository.getLocalNotes()) }
+            uiState = uiState.copy(notes = all)
+            onDone?.invoke()
+        }
     }
 
     fun setSortOrder(order: String) {

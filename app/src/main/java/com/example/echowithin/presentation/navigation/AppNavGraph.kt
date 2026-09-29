@@ -400,6 +400,8 @@ fun AppNavGraph(
                 folders = notesViewModel.uiState.folders,
                 filterFolder = notesViewModel.uiState.filterFolder,
                 onFilterFolder = { notesViewModel.setFilterFolder(it) },
+                filterType = notesViewModel.uiState.filterType,
+                onFilterTypeChange = { notesViewModel.setFilterType(it) },
                 onGamesClick = { navController.navigate(AppRoute.Games) }
             )
         }
@@ -494,7 +496,16 @@ fun AppNavGraph(
                 isLocked = appLockViewModel.uiState.isLocked,
                 lockError = appLockViewModel.uiState.error,
                 lockLoading = appLockViewModel.uiState.isLoading,
-                onVerifyPin = { appLockViewModel.verify(it) }
+                onVerifyPin = { appLockViewModel.verify(it) },
+                onSetReminder = { newReminder ->
+                    notesViewModel.setNoteReminder(context, noteId, newReminder)
+                },
+                onSetColor = { newColor ->
+                    notesViewModel.setNoteColor(noteId, newColor)
+                },
+                onUpdateContent = { newContent ->
+                    notesViewModel.updateNoteContentDirectly(noteId, newContent)
+                }
             )
         }
 

@@ -704,7 +704,44 @@ class NotesRepository(
             folder = folder,
             isTrashed = is_trashed,
             trashedAt = trashed_at,
-            reminderAt = reminder_at
+            reminderAt = reminder_at,
+            colorTag = color_tag ?: "default"
         )
+    }
+
+    suspend fun setReminder(noteId: String, reminderAt: String?): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            dbHelper.updateReminder(noteId, reminderAt)
+            if (!SessionManager.token.isNullOrBlank() && !noteId.startsWith("local_")) {
+                try {
+                    api.setReminder(noteId, com.example.echowithin.data.model.ReminderRequest(reminder_at = reminderAt))
+                } catch (_: Exception) {
+                    // Offline / transient network failure — pending sync handles it
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setColorTag(noteId: String, colorTag: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            dbHelper.updateColorTag(noteId, colorTag)
+            if (!SessionManager.token.isNullOrBlank() && !noteId.startsWith("local_")) {
+                try {
+                    api.setColor(noteId, com.example.echowithin.data.model.ColorRequest(color_tag = colorTag))
+                } catch (_: Exception) {
+                    // Offline / transient network failure
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun getNotesWithActiveReminders(): List<AppNote> {
+        return dbHelper.getNotesWithActiveReminders()
     }
 }

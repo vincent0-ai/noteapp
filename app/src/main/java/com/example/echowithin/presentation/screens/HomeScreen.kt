@@ -64,6 +64,13 @@ import androidx.compose.material.icons.filled.MoreVert
 import com.example.echowithin.data.repository.NoteImportExportHelper
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.filled.Alarm
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.Check
+import com.example.echowithin.ui.theme.NoteColorPalette
+import com.example.echowithin.presentation.viewmodel.HomeFilter
 import com.example.echowithin.ui.theme.ErrorRed
 import com.example.echowithin.ui.theme.BrandOrange
 
@@ -146,6 +153,9 @@ fun HomeScreen(
     folders: List<String> = emptyList(),
     filterFolder: String? = null,
     onFilterFolder: (String?) -> Unit = {},
+    // Quick Filters
+    filterType: HomeFilter = HomeFilter.ALL,
+    onFilterTypeChange: (HomeFilter) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     // Tabs available in offline mode: only Notes and Locked
@@ -608,6 +618,36 @@ fun HomeScreen(
             when (activeTab) {
                 HomeTab.NOTES -> {
                     Column {
+                        // Quick filter chips (All, Reminders, Tasks, Pinned)
+                        androidx.compose.foundation.lazy.LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(HomeFilter.entries.size) { index ->
+                                val filter = HomeFilter.entries[index]
+                                FilterChip(
+                                    selected = filterType == filter,
+                                    onClick = { onFilterTypeChange(filter) },
+                                    label = {
+                                        Text(
+                                            when (filter) {
+                                                HomeFilter.ALL -> "All"
+                                                HomeFilter.REMINDERS -> "Reminders ⏰"
+                                                HomeFilter.TASKS -> "Tasks ☑"
+                                                HomeFilter.PINNED -> "Pinned 📌"
+                                            }
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = BrandOrange,
+                                        selectedLabelColor = Color.White
+                                    )
+                                )
+                            }
+                        }
+
                         // Folder filter chips
                         if (folders.isNotEmpty()) {
                             androidx.compose.foundation.lazy.LazyRow(
@@ -1750,6 +1790,7 @@ fun NoteCard(
     isSelectionMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val isDark = isSystemInDarkTheme()
     val previewTitle = remember(note.title, note.content) {
         if (note.title.isNotBlank() && note.title != "Untitled") {
             note.title
@@ -1763,10 +1804,50 @@ fun NoteCard(
     }
     val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
+    val noteBgColor = remember(note.colorTag, isDark) {
+        if (note.colorTag.isNotBlank() && note.colorTag != "default") {
+            NoteColorPalette.getBackgroundColor(note.colorTag, isDark)
+        } else {
+            Color.Transparent
+        }
+    }
+
     val selectionBgColor = if (isSelected) {
-        MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     } else {
-        Color.Transparent
+        noteBgColor
+    }
+
+    val reminderInfo = remember(note.reminderAt) {
+        if (!note.reminderAt.isNullOrBlank()) {
+            try {
+                val epoch = java.time.Instant.parse(note.reminderAt).toEpochMilli()
+                val isOverdue = epoch < System.currentTimeMillis()
+                val text = DateTimeUtils.formatFullDateTime(note.reminderAt)
+                Triple(true, isOverdue, text)
+            } catch (_: Exception) {
+                Triple(true, false, note.reminderAt)
+            }
+        } else {
+            Triple(false, false, "")
+        }
+    }
+
+    val taskStats = remember(note.content) {
+        val lines = note.content.lines()
+        val total = lines.count { line ->
+            val t = line.trimStart()
+            t.startsWith("- [ ]") || t.startsWith("- [x]") || t.startsWith("- [X]") ||
+            t.startsWith("* [ ]") || t.startsWith("* [x]") || t.startsWith("* [X]")
+        }
+        if (total > 0) {
+            val completed = lines.count { line ->
+                val t = line.trimStart()
+                t.startsWith("- [x]") || t.startsWith("- [X]") ||
+                t.startsWith("* [x]") || t.startsWith("* [X]")
+            }
+            completed to total
+        } else null
     }
 
     Column(modifier = modifier) {
@@ -1779,7 +1860,7 @@ fun NoteCard(
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
-                .padding(vertical = 12.dp),
+                .padding(vertical = 12.dp, horizontal = if (note.colorTag.isNotBlank() && note.colorTag != "default") 12.dp else 0.dp),
             verticalAlignment = Alignment.Top
         ) {
             // Selection checkbox
@@ -1897,6 +1978,71 @@ fun NoteCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                // Reminders & Tasks pills
+                if (reminderInfo.first || taskStats != null) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        if (reminderInfo.first) {
+                            val isOverdue = reminderInfo.second
+                            val reminderText = reminderInfo.third
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isOverdue) ErrorRed.copy(alpha = 0.12f) else BrandOrange.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, if (isOverdue) ErrorRed.copy(alpha = 0.35f) else BrandOrange.copy(alpha = 0.35f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isOverdue) Icons.Default.NotificationsActive else Icons.Default.Alarm,
+                                        contentDescription = "Reminder",
+                                        tint = if (isOverdue) ErrorRed else BrandOrange,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = (if (isOverdue) "Overdue: " else "") + reminderText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isOverdue) ErrorRed else BrandOrange,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                        }
+                        if (taskStats != null) {
+                            val isAllDone = taskStats.first == taskStats.second && taskStats.second > 0
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isAllDone) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
+                                border = BorderStroke(1.dp, if (isAllDone) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isAllDone) Icons.Default.Check else Icons.Default.Checklist,
+                                        contentDescription = "Tasks",
+                                        tint = if (isAllDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Text(
+                                        text = "${taskStats.first}/${taskStats.second}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (isAllDone) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // Tags as inline text (Notesnook-style: plain #tag, no chips)
