@@ -52,6 +52,16 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.foundation.shape.CircleShape
 import com.example.echowithin.data.repository.NoteImportExportHelper
 import kotlinx.coroutines.Dispatchers
@@ -118,6 +128,7 @@ fun NoteDetailScreen(
     var errorMessage by remember(noteId) { mutableStateOf<String?>(null) }
     var showReminderDialog by remember { mutableStateOf(false) }
     var showColorDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
     val singleExportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("text/markdown")
     ) { uri ->
@@ -230,7 +241,30 @@ fun NoteDetailScreen(
                             onDismissRequest = { menuExpanded = false }
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Note Info") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    showInfoDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text(if (!noteState?.reminderAt.isNullOrBlank()) "Edit Reminder" else "Set Reminder") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (!noteState?.reminderAt.isNullOrBlank()) Icons.Default.NotificationsActive else Icons.Default.Alarm,
+                                        contentDescription = null,
+                                        tint = if (!noteState?.reminderAt.isNullOrBlank()) com.example.echowithin.ui.theme.BrandOrange else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
                                 onClick = {
                                     menuExpanded = false
                                     showReminderDialog = true
@@ -238,6 +272,14 @@ fun NoteDetailScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Note Color Tint") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Palette,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
                                 onClick = {
                                     menuExpanded = false
                                     showColorDialog = true
@@ -245,6 +287,14 @@ fun NoteDetailScreen(
                             )
                             DropdownMenuItem(
                                 text = { Text("Export as Markdown") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.FileDownload,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
                                 onClick = {
                                     menuExpanded = false
                                     val defaultName = (noteState?.title ?: "note").replace(Regex("[\\\\/:*?\"<>|]"), "_").trim() + ".md"
@@ -281,6 +331,14 @@ fun NoteDetailScreen(
                             if (noteState?.sourceNoteId != null) {
                                 DropdownMenuItem(
                                     text = { Text("Sync with original") },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Sync,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    },
                                     onClick = {
                                         menuExpanded = false
                                         isSyncing = true
@@ -414,14 +472,7 @@ fun NoteDetailScreen(
                         .height(24.dp)
                         .background(shimmerColor, RoundedCornerShape(6.dp))
                 )
-                // Date placeholder
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(0.35f)
-                        .height(14.dp)
-                        .background(shimmerColor, RoundedCornerShape(4.dp))
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+
                 // Body line placeholders
                 repeat(8) {
                     Box(
@@ -609,41 +660,7 @@ fun NoteDetailScreen(
                     }
                 }
 
-                // Date & Metadata info row
-                note?.let {
-                    val createdFormatted = remember(it.createdAt) {
-                        DateTimeUtils.formatFullDateTime(it.createdAt.ifBlank { it.updatedAt })
-                    }
-                    val updatedFormatted = remember(it.updatedAt) {
-                        DateTimeUtils.formatFullDateTime(it.updatedAt)
-                    }
-                    val updatedRelative = remember(it.updatedAt) {
-                        DateTimeUtils.formatRelativeTime(it.updatedAt)
-                    }
 
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "Updated: $updatedFormatted ($updatedRelative)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = "Created: $createdFormatted",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                }
 
                 // Tags Display — minimal inline text style
                 if (note?.tags?.isNotEmpty() == true) {
@@ -987,6 +1004,13 @@ fun NoteDetailScreen(
                 noteState = noteState?.copy(colorTag = newColor)
                 onSetColor?.invoke(newColor)
             }
+        )
+    }
+
+    if (showInfoDialog && noteState != null) {
+        NoteInfoDialog(
+            note = noteState!!,
+            onDismiss = { showInfoDialog = false }
         )
     }
 }
@@ -1669,3 +1693,180 @@ fun ColorPickerDialog(
         }
     )
 }
+
+@Composable
+fun NoteInfoDialog(
+    note: AppNote,
+    onDismiss: () -> Unit
+) {
+    val createdFormatted = remember(note.createdAt) {
+        DateTimeUtils.formatFullDateTime(note.createdAt.ifBlank { note.updatedAt })
+    }
+    val updatedFormatted = remember(note.updatedAt) {
+        DateTimeUtils.formatFullDateTime(note.updatedAt)
+    }
+    val updatedRelative = remember(note.updatedAt) {
+        DateTimeUtils.formatRelativeTime(note.updatedAt)
+    }
+
+    val wordCount = remember(note.content) {
+        if (note.content.isBlank()) 0 else note.content.trim().split("\\s+".toRegex()).size
+    }
+    val charCount = remember(note.content) { note.content.length }
+    val lineCount = remember(note.content) { if (note.content.isEmpty()) 0 else note.content.lines().size }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Note Details",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Title / Name
+                NoteInfoRow(
+                    label = "Title",
+                    value = note.title.ifBlank { "Untitled Note" },
+                    icon = Icons.Default.Description
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Modified Date & Time
+                NoteInfoRow(
+                    label = "Last Modified",
+                    value = "$updatedFormatted\n($updatedRelative)",
+                    icon = Icons.Default.Schedule
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Created Date & Time
+                NoteInfoRow(
+                    label = "Created",
+                    value = createdFormatted,
+                    icon = Icons.Default.CalendarToday
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                // Word / Character / Line counts
+                NoteInfoRow(
+                    label = "Length",
+                    value = "$wordCount words · $charCount characters · $lineCount lines",
+                    icon = Icons.Default.TextFields
+                )
+
+                if (note.tags.isNotEmpty()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    NoteInfoRow(
+                        label = "Tags",
+                        value = note.tags.joinToString(", ") { "#$it" },
+                        icon = Icons.Default.Tag
+                    )
+                }
+
+                if (note.reference.isNotBlank()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    NoteInfoRow(
+                        label = "Reference",
+                        value = note.reference,
+                        icon = Icons.Default.Link
+                    )
+                }
+
+                if (!note.folder.isNullOrBlank()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    NoteInfoRow(
+                        label = "Folder",
+                        value = note.folder,
+                        icon = Icons.Default.Folder
+                    )
+                }
+
+                if (!note.reminderAt.isNullOrBlank()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    val reminderFormatted = DateTimeUtils.formatFullDateTime(note.reminderAt)
+                    NoteInfoRow(
+                        label = "Reminder",
+                        value = reminderFormatted,
+                        icon = Icons.Default.Alarm
+                    )
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                val statusParts = mutableListOf<String>()
+                if (note.isLocked) statusParts.add("Locked (PIN Protected)") else statusParts.add("Unlocked")
+                if (note.isPinned) statusParts.add("Pinned")
+                if (note.isSynced) statusParts.add("Synced") else statusParts.add("Local draft")
+                if (note.sourceNoteId != null) statusParts.add("Linked to shared note")
+
+                NoteInfoRow(
+                    label = "Status",
+                    value = statusParts.joinToString(" • "),
+                    icon = if (note.isLocked) Icons.Default.Lock else Icons.Default.CheckCircle
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
+@Composable
+private fun NoteInfoRow(
+    label: String,
+    value: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp).padding(top = 2.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+

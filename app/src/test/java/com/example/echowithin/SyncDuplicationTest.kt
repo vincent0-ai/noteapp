@@ -44,6 +44,9 @@ class SyncDuplicationTest {
             override fun trashNote(id: String) {}
             override fun restoreNote(id: String) {}
             override fun emptyTrash() {}
+            override fun updateReminder(id: String, reminderAt: String?) {}
+            override fun updateColorTag(id: String, colorTag: String) {}
+            override fun getNotesWithActiveReminders(): List<AppNote> = emptyList()
         }
         val fakeApi = FakeApiService()
         val repository = NotesRepository(api = fakeApi, dbHelper = fakeDb)
@@ -111,6 +114,9 @@ class SyncDuplicationTest {
             override fun trashNote(id: String) {}
             override fun restoreNote(id: String) {}
             override fun emptyTrash() {}
+            override fun updateReminder(id: String, reminderAt: String?) {}
+            override fun updateColorTag(id: String, colorTag: String) {}
+            override fun getNotesWithActiveReminders(): List<AppNote> = emptyList()
         }
 
         val fakeApi = object : FakeApiService() {
@@ -221,6 +227,7 @@ class SyncDuplicationTest {
         override suspend fun getFolders(): FoldersResponse = FoldersResponse(folders = emptyList())
         override suspend fun moveNoteToFolder(noteId: String, body: Map<String, String?>): GenericResponse = GenericResponse(success = true)
         override suspend fun setReminder(noteId: String, body: ReminderRequest): GenericResponse = GenericResponse(success = true)
+        override suspend fun setColor(noteId: String, body: ColorRequest): GenericResponse = GenericResponse(success = true)
         override suspend fun pingCollaborators(shareId: String): PingResponse = PingResponse(success = true)
     }
 

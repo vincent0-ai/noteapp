@@ -1205,93 +1205,144 @@ fun SnakeGameView() {
                 }
             }
 
-            // Grid with Drag/Swipe Gestures
-            Box(
-                modifier = Modifier
-                    .size(240.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
-                    .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
-                    .pointerInput(isRunning, isGameOver) {
-                        if (!isRunning || isGameOver) return@pointerInput
-                        detectDragGestures(
-                            onDragStart = {
-                                dragAccumulatorX = 0f
-                                dragAccumulatorY = 0f
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragAccumulatorX += dragAmount.x
-                                dragAccumulatorY += dragAmount.y
-                            },
-                            onDragEnd = {
-                                val threshold = 18f
-                                if (abs(dragAccumulatorX) > abs(dragAccumulatorY)) {
-                                    if (abs(dragAccumulatorX) > threshold) {
-                                        if (dragAccumulatorX > 0 && direction != Pair(0, -1)) {
-                                            direction = Pair(0, 1) // Right
-                                        } else if (dragAccumulatorX < 0 && direction != Pair(0, 1)) {
-                                            direction = Pair(0, -1) // Left
-                                        }
-                                    }
-                                } else {
-                                    if (abs(dragAccumulatorY) > threshold) {
-                                        if (dragAccumulatorY > 0 && direction != Pair(-1, 0)) {
-                                            direction = Pair(1, 0) // Down
-                                        } else if (dragAccumulatorY < 0 && direction != Pair(1, 0)) {
-                                            direction = Pair(-1, 0) // Up
-                                        }
-                                    }
-                                }
-                            }
-                        )
-                    }
+            // Grid with Drag/Swipe Gestures - Responsive Large Board
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
             ) {
-                val cellSize = 240.dp / gridSize
+                val boardSize = maxWidth.coerceAtMost(400.dp)
+                val cellSize = boardSize / gridSize
 
-                // Food
                 Box(
                     modifier = Modifier
-                        .offset(x = cellSize * food.second, y = cellSize * food.first)
-                        .size(cellSize)
-                        .padding(1.dp)
-                        .clip(CircleShape)
-                        .background(BrandOrange)
-                )
-
-                // Snake
-                snake.forEachIndexed { index, segment ->
+                        .size(boardSize)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
+                        .border(1.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                        .pointerInput(isRunning, isGameOver) {
+                            if (!isRunning || isGameOver) return@pointerInput
+                            detectDragGestures(
+                                onDragStart = {
+                                    dragAccumulatorX = 0f
+                                    dragAccumulatorY = 0f
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragAccumulatorX += dragAmount.x
+                                    dragAccumulatorY += dragAmount.y
+                                    val threshold = 16f
+                                    if (abs(dragAccumulatorX) > abs(dragAccumulatorY)) {
+                                        if (abs(dragAccumulatorX) > threshold) {
+                                            if (dragAccumulatorX > 0 && direction != Pair(0, -1)) {
+                                                direction = Pair(0, 1) // Right
+                                                dragAccumulatorX = 0f
+                                                dragAccumulatorY = 0f
+                                            } else if (dragAccumulatorX < 0 && direction != Pair(0, 1)) {
+                                                direction = Pair(0, -1) // Left
+                                                dragAccumulatorX = 0f
+                                                dragAccumulatorY = 0f
+                                            }
+                                        }
+                                    } else {
+                                        if (abs(dragAccumulatorY) > threshold) {
+                                            if (dragAccumulatorY > 0 && direction != Pair(-1, 0)) {
+                                                direction = Pair(1, 0) // Down
+                                                dragAccumulatorX = 0f
+                                                dragAccumulatorY = 0f
+                                            } else if (dragAccumulatorY < 0 && direction != Pair(1, 0)) {
+                                                direction = Pair(-1, 0) // Up
+                                                dragAccumulatorX = 0f
+                                                dragAccumulatorY = 0f
+                                            }
+                                        }
+                                    }
+                                },
+                                onDragEnd = {
+                                    val threshold = 14f
+                                    if (abs(dragAccumulatorX) > abs(dragAccumulatorY)) {
+                                        if (abs(dragAccumulatorX) > threshold) {
+                                            if (dragAccumulatorX > 0 && direction != Pair(0, -1)) {
+                                                direction = Pair(0, 1)
+                                            } else if (dragAccumulatorX < 0 && direction != Pair(0, 1)) {
+                                                direction = Pair(0, -1)
+                                            }
+                                        }
+                                    } else {
+                                        if (abs(dragAccumulatorY) > threshold) {
+                                            if (dragAccumulatorY > 0 && direction != Pair(-1, 0)) {
+                                                direction = Pair(1, 0)
+                                            } else if (dragAccumulatorY < 0 && direction != Pair(1, 0)) {
+                                                direction = Pair(-1, 0)
+                                            }
+                                        }
+                                    }
+                                    dragAccumulatorX = 0f
+                                    dragAccumulatorY = 0f
+                                }
+                            )
+                        }
+                ) {
+                    // Food
                     Box(
                         modifier = Modifier
-                            .offset(x = cellSize * segment.second, y = cellSize * segment.first)
+                            .offset(x = cellSize * food.second, y = cellSize * food.first)
                             .size(cellSize)
-                            .padding(1.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.7f))
+                            .padding(1.5.dp)
+                            .clip(CircleShape)
+                            .background(BrandOrange)
                     )
-                }
 
-                if (isGameOver) {
-                    Box(
-                        modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Game Over!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text("Final Score: $score", color = BrandOrange, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    // Snake
+                    snake.forEachIndexed { index, segment ->
+                        Box(
+                            modifier = Modifier
+                                .offset(x = cellSize * segment.second, y = cellSize * segment.first)
+                                .size(cellSize)
+                                .padding(1.dp)
+                                .clip(RoundedCornerShape(if (index == 0) 5.dp else 3.dp))
+                                .background(if (index == 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.75f))
+                        )
+                    }
+
+                    if (isGameOver) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.65f))
+                                .clickable {
+                                    snake = listOf(Pair(7, 7), Pair(7, 6), Pair(7, 5))
+                                    direction = Pair(0, 1)
+                                    score = 0
+                                    isGameOver = false
+                                    isRunning = true
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text("Game Over!", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                                Text("Final Score: $score", color = BrandOrange, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text("Tap to restart", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+                            }
                         }
                     }
                 }
             }
 
             Text(
-                text = "Swipe on board or tap D-pad to change direction",
+                text = "Swipe anywhere on the board to steer",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
 
             // Controls
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Button(
                     onClick = {
                         if (isGameOver) {
@@ -1299,32 +1350,40 @@ fun SnakeGameView() {
                             direction = Pair(0, 1)
                             score = 0
                             isGameOver = false
+                            isRunning = true
+                        } else {
+                            isRunning = !isRunning
                         }
-                        isRunning = !isRunning
                     },
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = BrandOrange)
                 ) {
-                    Text(if (isRunning) "Pause" else if (isGameOver) "Restart" else "Start")
+                    Icon(
+                        imageVector = if (isRunning) Icons.Default.Pause else if (isGameOver) Icons.Default.Replay else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(if (isRunning) "Pause" else if (isGameOver) "Play Again" else "Start Game")
                 }
-            }
 
-            // D-Pad buttons
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(onClick = { if (direction != Pair(1, 0)) direction = Pair(-1, 0) }) {
-                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up")
-                }
-                Row {
-                    IconButton(onClick = { if (direction != Pair(0, 1)) direction = Pair(0, -1) }) {
-                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Left")
+                if (isRunning || score > 0 || isGameOver) {
+                    OutlinedButton(
+                        onClick = {
+                            isRunning = false
+                            isGameOver = false
+                            snake = listOf(Pair(7, 7), Pair(7, 6), Pair(7, 5))
+                            direction = Pair(0, 1)
+                            score = 0
+                            food = spawnFood(snake)
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Reset", style = MaterialTheme.typography.bodySmall)
                     }
-                    Spacer(modifier = Modifier.width(32.dp))
-                    IconButton(onClick = { if (direction != Pair(0, -1)) direction = Pair(0, 1) }) {
-                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Right")
-                    }
-                }
-                IconButton(onClick = { if (direction != Pair(-1, 0)) direction = Pair(1, 0) }) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down")
                 }
             }
         }
