@@ -344,9 +344,11 @@ fun AppNavGraph(
                 onManageShares = { noteId -> navController.navigate(AppRoute.share(noteId)) },
                 onOpenShareLink = { shareId ->
                     try {
+                        val token = SessionManager.token
+                        val tokenParam = if (!token.isNullOrBlank() && token != "null") "?token=$token" else ""
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://echowithin.xyz/share/note/$shareId")
+                            android.net.Uri.parse("https://echowithin.xyz/share/note/$shareId$tokenParam")
                         ).apply {
                             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
@@ -527,9 +529,11 @@ fun AppNavGraph(
                 onToggleAutoApprove = { shareId, enabled -> shareViewModel.toggleAutoApprove(shareId, enabled) },
                 onOpenShareLink = { shareId ->
                     try {
+                        val token = SessionManager.token
+                        val tokenParam = if (!token.isNullOrBlank() && token != "null") "?token=$token" else ""
                         val intent = android.content.Intent(
                             android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse("https://echowithin.xyz/share/note/$shareId")
+                            android.net.Uri.parse("https://echowithin.xyz/share/note/$shareId$tokenParam")
                         ).apply {
                             addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
