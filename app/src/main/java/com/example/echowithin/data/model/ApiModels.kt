@@ -1,5 +1,7 @@
 package com.example.echowithin.data.model
 
+import androidx.compose.runtime.Immutable
+
 data class ApiError(
     val error: String? = null
 )
@@ -69,6 +71,7 @@ data class GenericResponse(
     val error: String? = null
 )
 
+@Immutable
 data class AppNote(
     val id: String,
     val title: String,

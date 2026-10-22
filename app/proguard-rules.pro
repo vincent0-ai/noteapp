@@ -19,3 +19,17 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# ── Gson / Retrofit (reflection-based JSON mapping) ──
+# Keep all DTO/data model classes so Gson can deserialize them after R8.
+-keep class com.example.echowithin.data.model.** { *; }
+-keep class com.example.echowithin.data.network.EchoWithinApiService { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
+
+# ── WebView JavaScript bridge ──
+# Keep methods annotated @JavascriptInterface so the note math renderer
+# (assets/katex/math_renderer.html) can still call AndroidBridge.onContentHeight.
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}

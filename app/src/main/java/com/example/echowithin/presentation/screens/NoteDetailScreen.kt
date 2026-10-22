@@ -68,6 +68,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.mikepenz.markdown.m3.Markdown
+import com.mikepenz.markdown.model.rememberMarkdownState
 
 /**
  * Escapes note content so it is safe to interpolate into a JS template
@@ -741,9 +742,13 @@ fun NoteDetailScreen(
                             }
                         )
                     } else {
+                        // Parse once per note version off the main thread; the
+                        // parsed state is cached across recompositions so we never
+                        // re-parse markdown during a bind/composition pass.
+                        val markdownState = rememberMarkdownState(contentText)
                         androidx.compose.foundation.text.selection.SelectionContainer {
                             Markdown(
-                                content = contentText,
+                                markdownState = markdownState,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
