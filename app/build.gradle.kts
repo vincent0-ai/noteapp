@@ -67,6 +67,7 @@ dependencies {
     implementation("androidx.browser:browser:1.8.0")
     implementation(libs.mikepenz.markdown.renderer)
     implementation(libs.mikepenz.markdown.renderer.m3)
+    implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

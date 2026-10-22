@@ -132,7 +132,7 @@ class NotesRepository(
                         if (response.success && !response.id.isNullOrBlank()) {
                             dbHelper.deletePhysically(note.id)
                             dbHelper.saveNote(
-                                note.copy(id = response.id, isSynced = true, pendingOp = "none"),
+                                note.copy(id = response.id, isSynced = true, pendingOp = "none", syncStatus = "synced"),
                                 isSynced = true,
                                 pendingOp = "none"
                             )
@@ -160,7 +160,7 @@ class NotesRepository(
                         )
                         if (response.success) {
                             dbHelper.saveNote(
-                                note.copy(isSynced = true, pendingOp = "none"),
+                                note.copy(isSynced = true, pendingOp = "none", syncStatus = "synced"),
                                 isSynced = true,
                                 pendingOp = "none"
                             )
@@ -197,6 +197,7 @@ class NotesRepository(
             } catch (e: java.io.IOException) {
                 // True network connectivity loss: stop remaining batch to preserve ordering
                 e.printStackTrace()
+                markSyncFailed(note)
                 break
             } catch (e: retrofit2.HttpException) {
                 if (e.code() == 404) {
@@ -204,9 +205,11 @@ class NotesRepository(
                     dbHelper.deletePhysically(note.id)
                 } else {
                     e.printStackTrace()
+                    markSyncFailed(note)
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                markSyncFailed(note)
             }
         }
 
@@ -256,6 +259,27 @@ class NotesRepository(
                     )
                     dbHelper.saveNote(merged, isSynced = true, pendingOp = "none")
                 }
+            } else if (!local.isSynced && local.pendingOp == "edit") {
+                // Conflict: the local note has unsynced edits AND the server
+                // version is newer. Last-write-wins on the canonical note, but
+                // keep a conflict copy of the local edit so nothing is lost.
+                if (isServerNoteNewerOrEqual(serverNote, local)) {
+                    val conflictCopy = local.copy(
+                        id = "local_conflict_" + local.id + "_" + System.currentTimeMillis(),
+                        title = local.title + " (conflict)",
+                        sourceNoteId = local.id,
+                        isSynced = true,
+                        pendingOp = "none",
+                        updateAvailable = false,
+                        syncStatus = "synced"
+                    )
+                    dbHelper.saveNote(conflictCopy, isSynced = true, pendingOp = "none")
+                    val merged = serverNote.copy(
+                        isPinned = local.isPinned,
+                        isLocked = local.isLocked
+                    )
+                    dbHelper.saveNote(merged, isSynced = true, pendingOp = "none")
+                }
             }
         }
 
@@ -270,6 +294,18 @@ class NotesRepository(
                 dbHelper.deletePhysically(localNote.id)
             }
         }
+    }
+
+    /**
+     * Marks a pending note as "failed" so the UI can surface a retry affordance,
+     * while keeping its pendingOp so the next sync attempt retries it.
+     */
+    private fun markSyncFailed(note: AppNote) {
+        dbHelper.saveNote(
+            note.copy(syncStatus = "failed"),
+            isSynced = false,
+            pendingOp = note.pendingOp
+        )
     }
 
     internal fun isServerNoteNewerOrEqual(serverNote: AppNote, localNote: AppNote): Boolean {
@@ -307,7 +343,8 @@ class NotesRepository(
                 isLocked = false,
                 isPinned = false,
                 isSynced = false,
-                pendingOp = pendingOp
+                pendingOp = pendingOp,
+                syncStatus = "pending"
             )
             
             dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)
@@ -344,7 +381,8 @@ class NotesRepository(
                 sourceShareId = existing?.sourceShareId,
                 trashedAt = existing?.trashedAt,
                 folder = existing?.folder,
-                isTrashed = existing?.isTrashed ?: false
+                isTrashed = existing?.isTrashed ?: false,
+                syncStatus = "pending"
             )
             
             dbHelper.saveNote(note, isSynced = false, pendingOp = pendingOp)

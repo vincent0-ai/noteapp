@@ -91,7 +91,9 @@ data class AppNote(
     val isTrashed: Boolean = false,
     val trashedAt: String? = null,
     val reminderAt: String? = null,
-    val colorTag: String = "default"
+    val colorTag: String = "default",
+    /** "pending" | "synced" | "failed" — per-note sync state surfaced in the UI. */
+    val syncStatus: String = "synced"
 )
 
 data class ProfileResponse(

@@ -172,6 +172,7 @@ import java.util.concurrent.TimeUnit
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(15, TimeUnit.SECONDS)
             .cookieJar(persistentCookieJar)
+            .addInterceptor(GzipRequestInterceptor())
             .addInterceptor { chain ->
                 val originalRequest = chain.request()
                 val requestBuilder = originalRequest.newBuilder()

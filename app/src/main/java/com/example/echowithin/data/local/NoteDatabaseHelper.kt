@@ -30,7 +30,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
 
     companion object {
         private const val DATABASE_NAME = "echowithin.db"
-        private const val DATABASE_VERSION = 7
+        private const val DATABASE_VERSION = 8
 
         const val TABLE_NOTES = "notes"
         const val COLUMN_ID = "id"
@@ -54,6 +54,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         const val COLUMN_FOLDER = "folder"
         const val COLUMN_REMINDER_AT = "reminder_at"
         const val COLUMN_COLOR_TAG = "color_tag"
+        const val COLUMN_SYNC_STATUS = "sync_status"
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -77,7 +78,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 $COLUMN_TRASHED_AT TEXT,
                 $COLUMN_FOLDER TEXT,
                 $COLUMN_REMINDER_AT TEXT,
-                $COLUMN_COLOR_TAG TEXT DEFAULT 'default'
+                $COLUMN_COLOR_TAG TEXT DEFAULT 'default',
+                $COLUMN_SYNC_STATUS TEXT DEFAULT 'synced'
             )
         """.trimIndent()
         db.execSQL(createTable)
@@ -128,6 +130,12 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
                 db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_COLOR_TAG TEXT DEFAULT 'default'")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_notes_reminder ON $TABLE_NOTES ($COLUMN_REMINDER_AT)")
                 currentVersion = 7
+            }
+            if (currentVersion < 8) {
+                db.execSQL("ALTER TABLE $TABLE_NOTES ADD COLUMN $COLUMN_SYNC_STATUS TEXT DEFAULT 'synced'")
+                // Backfill: rows that were mid-sync before this column existed.
+                db.execSQL("UPDATE $TABLE_NOTES SET $COLUMN_SYNC_STATUS = 'pending' WHERE $COLUMN_IS_SYNCED = 0")
+                currentVersion = 8
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -271,6 +279,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             put(COLUMN_FOLDER, note.folder)
             put(COLUMN_REMINDER_AT, note.reminderAt)
             put(COLUMN_COLOR_TAG, note.colorTag)
+            put(COLUMN_SYNC_STATUS, note.syncStatus)
         }
         db.replace(TABLE_NOTES, null, values)
     }
@@ -484,6 +493,7 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
         val createdIdx = c.getColumnIndex(COLUMN_CREATED_AT)
         val reminderIdx = c.getColumnIndex(COLUMN_REMINDER_AT)
         val colorIdx = c.getColumnIndex(COLUMN_COLOR_TAG)
+        val syncStatusIdx = c.getColumnIndex(COLUMN_SYNC_STATUS)
         val createdAt = if (createdIdx >= 0) c.getString(createdIdx) else null
         val updatedAt = c.getString(updatedIdx).orEmpty()
         val finalCreatedAt = if (!createdAt.isNullOrBlank()) createdAt else updatedAt
@@ -508,7 +518,8 @@ class NoteDatabaseHelper(context: Context) : SQLiteOpenHelper(context, DATABASE_
             trashedAt = if (trashedAtIdx >= 0) c.getString(trashedAtIdx) else null,
             folder = if (folderIdx >= 0) c.getString(folderIdx) else null,
             reminderAt = reminderAt,
-            colorTag = colorTag
+            colorTag = colorTag,
+            syncStatus = if (syncStatusIdx >= 0) c.getString(syncStatusIdx) ?: "synced" else "synced"
         )
     }
 }

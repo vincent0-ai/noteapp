@@ -1895,21 +1895,33 @@ fun NoteCard(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    if (note.pendingOp == "draft") {
-                        Text(
-                            text = "Draft",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = BrandOrange,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
-                    } else if (!note.isSynced) {
-                        val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
-                        Text(
-                            text = badgeText,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.secondary,
-                            modifier = Modifier.padding(start = 8.dp)
-                        )
+                    when {
+                        note.syncStatus == "failed" -> {
+                            Text(
+                                text = "Sync failed",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ErrorRed,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                        note.pendingOp == "draft" -> {
+                            Text(
+                                text = "Draft",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = BrandOrange,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                        !note.isSynced -> {
+                            val badgeText = if (com.example.echowithin.data.network.SessionManager.accountTier == "free") "Local" else "Pending"
+                            Text(
+                                text = badgeText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
                     }
                 }
 

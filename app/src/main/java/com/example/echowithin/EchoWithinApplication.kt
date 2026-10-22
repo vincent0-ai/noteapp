@@ -22,6 +22,8 @@ class EchoWithinApplication : Application() {
         instance = this
         SessionManager.init(this)
         createNotificationChannels()
+        // Schedule periodic background sync (network-constrained, exp backoff).
+        com.example.echowithin.data.sync.SyncWorker.schedule(this)
     }
 
     private fun createNotificationChannels() {

@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -164,6 +166,7 @@ class NotesViewModel(
      */
     private val autoSyncCooldownMs = 5 * 60 * 1000L
     private var lastSyncStartedAt = 0L
+    private var debounceJob: Job? = null
 
     /**
      * Push pending local changes and pull fresh notes from the server.
@@ -176,7 +179,7 @@ class NotesViewModel(
      *  - [force] = true (user tapped Sync, or "Back up offline notes")
      *    always runs immediately.
      */
-    fun syncNotes(force: Boolean = false) {
+    fun syncNotes(force: Boolean = false, silent: Boolean = false) {
         if (uiState.isSyncing) return
         if (!force) {
             val now = System.currentTimeMillis()
@@ -206,7 +209,7 @@ class NotesViewModel(
                         loadNotes(silent = true)
                         ephemeralMessage = if (removed > 0) {
                             "Cleaned up $removed duplicate note${if (removed == 1) "" else "s"} from a previous sync"
-                        } else if (force) {
+                        } else if (force && !silent) {
                             // Only show "Synced" when the user explicitly tapped sync,
                             // not on every auto-sync which would be spammy.
                             "Synced with the server"
@@ -228,6 +231,20 @@ class NotesViewModel(
                         }
                     }
                 }
+        }
+    }
+
+    /**
+     * Debounced sync trigger (~500 ms). Coalesces a burst of local edits into
+     * a single push, so typing/saving several notes in quick succession does
+     * not fire a sync per keystroke. Runs immediately (bypassing the 5-min
+     * automatic cooldown) and silently (no "Synced" toast).
+     */
+    fun debouncedSync(delayMs: Long = 500) {
+        debounceJob?.cancel()
+        debounceJob = viewModelScope.launch {
+            delay(delayMs)
+            syncNotes(force = true, silent = true)
         }
     }
 
@@ -638,8 +655,8 @@ class NotesViewModel(
             repository.createNote(content = content, reference = reference, tags = tags)
                 .onSuccess { id ->
                     loadNotes()
-                    // Queue background sync (respects 5-min cooldown)
-                    syncNotes()
+                    // Debounced push of the newly changed note.
+                    debouncedSync()
                     onDone(id)
                 }
                 .onFailure {
@@ -654,8 +671,8 @@ class NotesViewModel(
             repository.editNote(noteId = noteId, content = content, reference = reference, tags = tags)
                 .onSuccess { _ ->
                     loadNotes()
-                    // Queue background sync (respects 5-min cooldown)
-                    syncNotes()
+                    // Debounced push of the changed note.
+                    debouncedSync()
                     onDone()
                 }
                 .onFailure {
@@ -690,7 +707,7 @@ class NotesViewModel(
             repository.deleteNote(noteId)
                 .onSuccess {
                     loadNotes()
-                    syncNotes()
+                    debouncedSync()
                     onDone()
                 }
                 .onFailure {
@@ -708,7 +725,7 @@ class NotesViewModel(
                     .onSuccess { deletedCount++ }
             }
             loadNotes()
-            syncNotes()
+            debouncedSync()
             uiState = uiState.copy(isLoading = false)
             onDone(deletedCount)
         }
