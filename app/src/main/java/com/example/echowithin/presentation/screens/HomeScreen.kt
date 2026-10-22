@@ -40,6 +40,7 @@ import com.example.echowithin.data.model.NotificationDto
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
 import com.example.echowithin.presentation.components.ProposalReviewDialog
 import com.example.echowithin.util.DateTimeUtils
+import com.example.echowithin.util.MarkdownText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Fingerprint
@@ -64,7 +65,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import com.example.echowithin.data.repository.NoteImportExportHelper
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Checklist
@@ -73,15 +73,7 @@ import com.example.echowithin.ui.theme.NoteColorPalette
 import com.example.echowithin.presentation.viewmodel.HomeFilter
 import com.example.echowithin.ui.theme.ErrorRed
 import com.example.echowithin.ui.theme.BrandOrange
-
-// ── Pre-compiled regex patterns for stripMarkdown (performance fix) ──
-private val REGEX_HEADING = Regex("(?m)^#+\\s+")
-private val REGEX_BLOCKQUOTE = Regex("(?m)^[\\s*+-]*>\\s*")
-private val REGEX_LIST_ITEM = Regex("(?m)^[\\s]*[*+-]\\s+")
-private val REGEX_FORMATTING = Regex("\\*\\*|__|\\*|_|~~")
-private val REGEX_BACKTICK = Regex("`+")
-private val REGEX_LINK = Regex("\\[(.*?)\\]\\(.*?\\)")
-private val REGEX_IMAGE = Regex("!\\[(.*?)\\]\\(.*?\\)")
+import com.example.echowithin.ui.theme.AppIsDarkTheme
 
 enum class HomeTab(val title: String) {
     NOTES("Notes"),
@@ -1586,8 +1578,7 @@ private fun SharedNoteCard(
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         text = if (note.isLocked) "🔒 Locked Note"
-                               else stripMarkdown(note.content).lineSequence().firstOrNull()?.trim()?.take(60)
-                                   ?: "Untitled",
+                               else MarkdownText.titleFrom(note.content),
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -1655,7 +1646,7 @@ private fun FirstCharAvatar(
     isLocked: Boolean,
     size: androidx.compose.ui.unit.Dp = 44.dp
 ) {
-    val stripped = if (isLocked) "" else stripMarkdown(content).trim()
+    val stripped = if (isLocked) "" else MarkdownText.plainText(content).trim()
     val firstChar = if (isLocked) "🔒"
         else stripped.firstOrNull()?.toString()?.take(1)?.uppercase()
             ?: titleFallback.trim().firstOrNull()?.toString()?.take(1)?.uppercase()
@@ -1790,17 +1781,12 @@ fun NoteCard(
     isSelectionMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-    val previewTitle = remember(note.title, note.content) {
-        if (note.title.isNotBlank() && note.title != "Untitled") {
-            note.title
-        } else {
-            val sample = note.content.take(120)
-            extractPreviewSnippet(sample, 60).ifBlank { "Untitled" }
-        }
+    val isDark = AppIsDarkTheme
+    val previewTitle = remember(note.content) {
+        MarkdownText.titleFrom(note.content)
     }
     val previewBody = remember(note.content) {
-        extractPreviewSnippet(note.content, 140)
+        MarkdownText.previewFrom(note.content, 140)
     }
     val relativeTime = remember(note.updatedAt) { formatRelativeTime(note.updatedAt) }
 
@@ -2123,90 +2109,6 @@ private fun formatLastSynced(epochMillis: Long): String {
         diffSec < 86_400 -> "${diffSec / 3600}h ago"
         else -> "${diffSec / 86_400}d ago"
     }
-}
-
-private fun stripBackslashEscapes(text: String): String {
-    val sb = StringBuilder()
-    var i = 0
-    val escapable = setOf('\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!', '~', '$')
-    while (i < text.length) {
-        if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in escapable) {
-            sb.append(text[i + 1])
-            i += 2
-        } else {
-            sb.append(text[i])
-            i++
-        }
-    }
-    return sb.toString()
-}
-
-private fun extractPreviewSnippet(content: String, maxChars: Int = 140): String {
-    if (content.isBlank()) return ""
-    val sb = StringBuilder(maxChars)
-    var i = 0
-    val len = minOf(content.length, 400)
-    while (i < len && sb.length < maxChars) {
-        val c = content[i]
-        when (c) {
-            '#', '*', '_', '~', '`', '>' -> {
-                i++
-            }
-            '[' -> {
-                if (i + 4 < len && (content.startsWith("[ ] ", i) || content.startsWith("[x] ", i) || content.startsWith("[X] ", i))) {
-                    i += 4
-                } else {
-                    i++
-                }
-            }
-            ']' -> {
-                i++
-                if (i < len && content[i] == '(') {
-                    val closeParen = content.indexOf(')', i + 1)
-                    if (closeParen != -1 && closeParen < len + 50) {
-                        i = closeParen + 1
-                    }
-                }
-            }
-            '!' -> {
-                if (i + 1 < len && content[i + 1] == '[') {
-                    i += 2
-                } else {
-                    sb.append(c)
-                    i++
-                }
-            }
-            '\n', '\r' -> {
-                if (sb.isNotEmpty() && sb[sb.length - 1] != ' ') {
-                    sb.append(' ')
-                }
-                i++
-            }
-            ' ' -> {
-                if (sb.isNotEmpty() && sb[sb.length - 1] != ' ') {
-                    sb.append(' ')
-                }
-                i++
-            }
-            '\\' -> {
-                if (i + 1 < len) {
-                    sb.append(content[i + 1])
-                    i += 2
-                } else {
-                    i++
-                }
-            }
-            else -> {
-                sb.append(c)
-                i++
-            }
-        }
-    }
-    return sb.toString().trim()
-}
-
-private fun stripMarkdown(text: String): String {
-    return extractPreviewSnippet(text, text.length)
 }
 
 @Composable

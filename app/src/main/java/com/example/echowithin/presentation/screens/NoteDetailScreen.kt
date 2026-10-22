@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -44,6 +43,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.PushPin
 import com.example.echowithin.ui.theme.ErrorRed
+import com.example.echowithin.ui.theme.AppIsDarkTheme
 import androidx.compose.material.icons.filled.Sync
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,21 +67,7 @@ import com.example.echowithin.data.repository.NoteImportExportHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
-// Pre-compiled regex patterns for markdown rendering
-private val headingRegex = Regex("^(#+)\\s+(.*)$")
-private val blockquoteRegex = Regex("^\\s*>\\s*")
-private val unorderedListRegex = Regex("^\\s*[-*]\\s+(.*)")
-private val orderedListRegex = Regex("^\\s*(\\d+)\\.\\s+(.*)")
-private val horizontalRuleRegex = Regex("^\\s*(---+|\\*\\*\\*+)\\s*$")
-private val codeBlockFenceRegex = Regex("^```")
-private val boldDoubleAsteriskRegex = Regex("\\*\\*(.+?)\\*\\*")
-private val boldDoubleUnderscoreRegex = Regex("__(.+?)__")
-private val strikethroughRegex = Regex("~~(.+?)~~")
-private val inlineCodeRegex = Regex("`([^`]+)`")
-private val linkRegex = Regex("\\[([^]]+)]\\(([^)]+)\\)")
-private val italicAsteriskRegex = Regex("(?<!\\*)\\*(?!\\*)(.+?)(?<!\\*)\\*(?!\\*)")
-private val italicUnderscoreRegex = Regex("(?<=\\s|^)_(?!_)(.+?)(?<!_)_(?=\\s|$|[.,;:!?])")
+import com.mikepenz.markdown.m3.Markdown
 
 /**
  * Escapes note content so it is safe to interpolate into a JS template
@@ -353,14 +339,14 @@ fun NoteDetailScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme()) != Color.Transparent)
-                        com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme())
+                    containerColor = if (com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, AppIsDarkTheme) != Color.Transparent)
+                        com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, AppIsDarkTheme)
                     else MaterialTheme.colorScheme.background
                 )
             )
         },
-        containerColor = if (com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme()) != Color.Transparent)
-            com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, isSystemInDarkTheme())
+        containerColor = if (com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, AppIsDarkTheme) != Color.Transparent)
+            com.example.echowithin.ui.theme.NoteColorPalette.getBackgroundColor(noteState?.colorTag, AppIsDarkTheme)
         else MaterialTheme.colorScheme.background
     ) { innerPadding ->
         if (noteState?.isLocked == true && isLocked) {
@@ -711,7 +697,7 @@ fun NoteDetailScreen(
                 // to exactly match — no internal scrolling, the outer
                 // Compose verticalScroll handles everything.
 
-                val isDark = isSystemInDarkTheme()
+                val isDark = AppIsDarkTheme
                 val contentText = note?.content.orEmpty()
                 val hasComplexMath = remember(contentText) {
                     contentText.contains("\\frac") || contentText.contains("\\sqrt") ||
@@ -755,14 +741,9 @@ fun NoteDetailScreen(
                             }
                         )
                     } else {
-                        val formattedMarkdown = remember(contentText, primaryColor, secondaryColor) {
-                            renderMarkdown(contentText, primaryColor, secondaryColor)
-                        }
                         androidx.compose.foundation.text.selection.SelectionContainer {
-                            Text(
-                                text = formattedMarkdown,
-                                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-                                color = MaterialTheme.colorScheme.onSurface,
+                            Markdown(
+                                content = contentText,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
@@ -1015,369 +996,6 @@ fun NoteDetailScreen(
     }
 }
 
-private fun renderMarkdown(
-    markdown: String,
-    primaryColor: Color,
-    secondaryColor: Color
-): AnnotatedString {
-    return buildAnnotatedString {
-        val lines = markdown.split("\n")
-        var inCodeBlock = false
-        var inMathBlock = false
-        var i = 0
-
-        while (i < lines.size) {
-            val line = lines[i]
-
-            // Toggle code block state on ``` fences
-            if (codeBlockFenceRegex.containsMatchIn(line)) {
-                if (!inCodeBlock) {
-                    inCodeBlock = true
-                    i++
-                    continue
-                } else {
-                    inCodeBlock = false
-                    i++
-                    continue
-                }
-            }
-
-            // Inside code block — render as monospace, no formatting
-            if (inCodeBlock) {
-                pushStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Monospace,
-                        color = secondaryColor,
-                        background = secondaryColor.copy(alpha = 0.08f)
-                    )
-                )
-                append(line)
-                pop()
-                if (i < lines.size - 1) append("\n")
-                i++
-                continue
-            }
-
-            // Toggle math block state on $$ fences
-            if (line.trim() == "$$") {
-                if (!inMathBlock) {
-                    inMathBlock = true
-                    i++
-                    continue
-                } else {
-                    inMathBlock = false
-                    i++
-                    continue
-                }
-            }
-
-            // Inside math block — render with serif math styling
-            if (inMathBlock) {
-                pushStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        color = primaryColor,
-                        fontSize = 17.sp
-                    )
-                )
-                append("    ") // Indentation
-                append(line)
-                pop()
-                if (i < lines.size - 1) append("\n")
-                i++
-                continue
-            }
-
-            // Horizontal rule
-            if (horizontalRuleRegex.matches(line)) {
-                append("─".repeat(30))
-                if (i < lines.size - 1) append("\n")
-                i++
-                continue
-            }
-
-            // Empty line → extra spacing
-            if (line.isBlank()) {
-                if (i < lines.size - 1) append("\n")
-                i++
-                continue
-            }
-
-            var isHeading = false
-            var isBlockquote = false
-            var isList = false
-
-            // Check for Headings
-            if (line.startsWith("#")) {
-                val headingMatch = headingRegex.find(line)
-                if (headingMatch != null) {
-                    isHeading = true
-                    val level = headingMatch.groupValues[1].length
-                    val contentText = headingMatch.groupValues[2]
-
-                    val sizeMultiplier = when (level) {
-                        1 -> 1.3f
-                        2 -> 1.2f
-                        else -> 1.1f
-                    }
-                    pushStyle(
-                        SpanStyle(
-                            color = primaryColor,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = (18 * sizeMultiplier).sp
-                        )
-                    )
-                    appendInlineFormatting(contentText, primaryColor, secondaryColor)
-                    pop()
-                }
-            }
-            // Check for Blockquote
-            else if (line.trimStart().startsWith(">")) {
-                isBlockquote = true
-                val contentText = blockquoteRegex.replaceFirst(line, "")
-                pushStyle(
-                    SpanStyle(
-                        color = secondaryColor,
-                        fontStyle = FontStyle.Italic
-                    )
-                )
-                append("▎ ") // Visual bar indicator
-                appendInlineFormatting(contentText, primaryColor, secondaryColor)
-                pop()
-            }
-            // Check for task list (checkbox) items - [ ] or - [x]
-            else if (line.trimStart().let { it.startsWith("- [ ] ") || it.startsWith("- [x] ") || it.startsWith("- [X] ") || it.startsWith("* [ ] ") || it.startsWith("* [x] ") || it.startsWith("* [X] ") }) {
-                isList = true
-                val trimmed = line.trimStart()
-                val isChecked = trimmed[3] == 'x' || trimmed[3] == 'X'
-                val content = trimmed.substring(6)
-                val checkbox = if (isChecked) "☑ " else "☐ "
-                append("  $checkbox")
-                if (isChecked) {
-                    pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough, color = secondaryColor.copy(alpha = 0.6f)))
-                    appendInlineFormatting(content, primaryColor, secondaryColor)
-                    pop()
-                } else {
-                    appendInlineFormatting(content, primaryColor, secondaryColor)
-                }
-            }
-            // Check for unordered list
-            else if (unorderedListRegex.matches(line)) {
-                isList = true
-                val match = unorderedListRegex.find(line)!!
-                val content = match.groupValues[1]
-                append("  • ")
-                appendInlineFormatting(content, primaryColor, secondaryColor)
-            }
-            // Check for ordered list
-            else if (orderedListRegex.matches(line)) {
-                isList = true
-                val match = orderedListRegex.find(line)!!
-                val number = match.groupValues[1]
-                val content = match.groupValues[2]
-                append("  $number. ")
-                appendInlineFormatting(content, primaryColor, secondaryColor)
-            }
-
-            if (!isHeading && !isBlockquote && !isList) {
-                appendInlineFormatting(line, primaryColor, secondaryColor)
-            }
-
-            if (i < lines.size - 1) {
-                append("\n")
-            }
-            i++
-        }
-    }
-}
-
-private fun AnnotatedString.Builder.appendInlineFormatting(
-    text: String,
-    primaryColor: Color,
-    secondaryColor: Color
-) {
-    var i = 0
-    val escapable = setOf('\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!', '~', '$')
-    while (i < text.length) {
-        // Backslash escaping
-        if (text[i] == '\\' && i + 1 < text.length) {
-            val nextChar = text[i + 1]
-            if (nextChar in escapable) {
-                append(nextChar.toString())
-                i += 2
-                continue
-            }
-        }
-        // Single line block math $$equation$$
-        if (i + 1 < text.length && text[i] == '$' && text[i + 1] == '$') {
-            val endIdx = text.indexOf("$$", i + 2)
-            if (endIdx != -1) {
-                pushStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        color = primaryColor,
-                        fontSize = 17.sp
-                    )
-                )
-                append(text.substring(i + 2, endIdx))
-                pop()
-                i = endIdx + 2
-                continue
-            }
-        }
-
-        // Inline math $equation$
-        if (text[i] == '$') {
-            val endIdx = text.indexOf('$', i + 1)
-            if (endIdx != -1 && endIdx > i + 1) {
-                pushStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Serif,
-                        fontStyle = FontStyle.Italic,
-                        color = primaryColor
-                    )
-                )
-                append(text.substring(i + 1, endIdx))
-                pop()
-                i = endIdx + 1
-                continue
-            }
-        }
-        // Strikethrough ~~text~~
-        if (i + 1 < text.length && text[i] == '~' && text[i + 1] == '~') {
-            val endIdx = text.indexOf("~~", i + 2)
-            if (endIdx != -1) {
-                pushStyle(SpanStyle(textDecoration = TextDecoration.LineThrough))
-                appendInlineFormatting(text.substring(i + 2, endIdx), primaryColor, secondaryColor)
-                pop()
-                i = endIdx + 2
-                continue
-            }
-        }
-
-        // Image ![alt](url) — render as descriptive text
-        if (text[i] == '!' && i + 1 < text.length && text[i + 1] == '[') {
-            val imgMatch = Regex("!\\[([^]]*)]\\(([^)]+)\\)").find(text, i)
-            if (imgMatch != null && imgMatch.range.first == i) {
-                val altText = imgMatch.groupValues[1].ifBlank { "image" }
-                pushStyle(
-                    SpanStyle(
-                        color = secondaryColor,
-                        fontStyle = FontStyle.Italic
-                    )
-                )
-                append("[📷 $altText]")
-                pop()
-                i = imgMatch.range.last + 1
-                continue
-            }
-        }
-
-        // Markdown link [text](url) — render text only
-        if (text[i] == '[') {
-            val linkMatch = linkRegex.find(text, i)
-            if (linkMatch != null && linkMatch.range.first == i) {
-                val linkText = linkMatch.groupValues[1]
-                pushStyle(
-                    SpanStyle(
-                        color = primaryColor,
-                        textDecoration = TextDecoration.Underline
-                    )
-                )
-                append(linkText)
-                pop()
-                i = linkMatch.range.last + 1
-                continue
-            }
-        }
-
-        // Monospace Code `code`
-        if (text[i] == '`') {
-            val endIdx = text.indexOf('`', i + 1)
-            if (endIdx != -1) {
-                pushStyle(
-                    SpanStyle(
-                        fontFamily = FontFamily.Monospace,
-                        color = secondaryColor,
-                        background = secondaryColor.copy(alpha = 0.10f)
-                    )
-                )
-                append(text.substring(i + 1, endIdx))
-                pop()
-                i = endIdx + 1
-                continue
-            }
-        }
-
-        // Bold **bold**
-        if (i + 1 < text.length && text[i] == '*' && text[i + 1] == '*') {
-            val endIdx = text.indexOf("**", i + 2)
-            if (endIdx != -1) {
-                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                appendInlineFormatting(text.substring(i + 2, endIdx), primaryColor, secondaryColor)
-                pop()
-                i = endIdx + 2
-                continue
-            }
-        }
-        // Bold __bold__
-        if (i + 1 < text.length && text[i] == '_' && text[i + 1] == '_') {
-            val endIdx = text.indexOf("__", i + 2)
-            if (endIdx != -1) {
-                pushStyle(SpanStyle(fontWeight = FontWeight.Bold))
-                appendInlineFormatting(text.substring(i + 2, endIdx), primaryColor, secondaryColor)
-                pop()
-                i = endIdx + 2
-                continue
-            }
-        }
-
-        // Italic *italic*
-        if (text[i] == '*') {
-            val endIdx = text.indexOf('*', i + 1)
-            if (endIdx != -1) {
-                pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                appendInlineFormatting(text.substring(i + 1, endIdx), primaryColor, secondaryColor)
-                pop()
-                i = endIdx + 1
-                continue
-            }
-        }
-        // Italic _italic_ — only at word boundaries (not inside variable_names)
-        if (text[i] == '_') {
-            val atWordBoundary = (i == 0 || text[i - 1].isWhitespace() || text[i - 1] in ".,;:!?\"'(")
-            if (atWordBoundary) {
-                // Find closing _ that is also at a word boundary
-                var endIdx = -1
-                var searchFrom = i + 1
-                while (searchFrom < text.length) {
-                    val candidate = text.indexOf('_', searchFrom)
-                    if (candidate == -1) break
-                    val afterBoundary = (candidate == text.length - 1 || text[candidate + 1].isWhitespace() || text[candidate + 1] in ".,;:!?\"')")
-                    if (afterBoundary) {
-                        endIdx = candidate
-                        break
-                    }
-                    searchFrom = candidate + 1
-                }
-                if (endIdx != -1 && endIdx > i + 1) {
-                    pushStyle(SpanStyle(fontStyle = FontStyle.Italic))
-                    appendInlineFormatting(text.substring(i + 1, endIdx), primaryColor, secondaryColor)
-                    pop()
-                    i = endIdx + 1
-                    continue
-                }
-            }
-        }
-
-        // Regular character
-        append(text[i].toString())
-        i++
-    }
-}
-
 /**
  * Compact action bar item: icon + label stacked vertically.
  * Used in the NoteDetailScreen bottom toolbar.
@@ -1472,13 +1090,8 @@ fun InteractiveTaskContent(
                     )
                 }
             } else if (line.isNotBlank()) {
-                val formatted = remember(line, primaryColor, secondaryColor) {
-                    renderMarkdown(line, primaryColor, secondaryColor)
-                }
-                Text(
-                    text = formatted,
-                    style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-                    color = primaryColor,
+                Markdown(
+                    content = line,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                 )
             } else {

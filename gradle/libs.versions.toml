@@ -16,6 +16,7 @@ gson = "2.11.0"
 coroutines = "1.10.2"
 googleServices = "4.4.2"
 firebaseBom = "33.1.0"
+markdownRenderer = "0.37.0"
 
 
 [libraries]
@@ -44,6 +45,8 @@ okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor",
 gson-core = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
+mikepenz-markdown-renderer = { group = "com.mikepenz", name = "multiplatform-markdown-renderer", version.ref = "markdownRenderer" }
+mikepenz-markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdownRenderer" }
 
 
 [plugins]

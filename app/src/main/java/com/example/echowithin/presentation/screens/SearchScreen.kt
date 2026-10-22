@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Lock
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
+import com.example.echowithin.util.MarkdownText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -224,7 +225,7 @@ fun SearchScreen(
 }
 
 fun parseSearchSnippet(snippet: String, highlightColor: Color): AnnotatedString {
-    val cleanSnippet = stripMarkdown(snippet)
+    val cleanSnippet = MarkdownText.plainText(snippet)
 
     return buildAnnotatedString {
         val markStartTag = "<mark class=\"search-highlight\">"
@@ -252,44 +253,4 @@ fun parseSearchSnippet(snippet: String, highlightColor: Color): AnnotatedString 
     }
 }
 
-// Pre-compiled markdown-stripping regexes. Previously stripMarkdown()
-// allocated 7 fresh Regex objects per call per visible card, which ran on
-// every recomposition (every scroll frame / every keystroke) and caused
-// noticeable GC pressure and frame drops on long search lists. Compiling
-// them once at file scope (matching the pattern HomeScreen uses) removes
-// that per-frame cost entirely.
-private val searchMdHeadingRegex = Regex("(?m)^#+\\s+")
-private val searchMdBlockquoteRegex = Regex("(?m)^[\\s*+-]*>\\s*")
-private val searchMdListItemRegex = Regex("(?m)^[\\s]*[*+-]\\s+")
-private val searchMdEmphasisRegex = Regex("\\*\\*|__|\\*|_|~~")
-private val searchMdInlineCodeRegex = Regex("`+")
-private val searchMdLinkRegex = Regex("\\[(.*?)\\]\\(.*?\\)")
-private val searchMdImageRegex = Regex("!\\[(.*?)\\]\\(.*?\\)")
 
-private fun stripBackslashEscapes(text: String): String {
-    val sb = StringBuilder()
-    var i = 0
-    val escapable = setOf('\\', '`', '*', '_', '{', '}', '[', ']', '(', ')', '#', '+', '-', '.', '!', '~', '$')
-    while (i < text.length) {
-        if (text[i] == '\\' && i + 1 < text.length && text[i + 1] in escapable) {
-            sb.append(text[i + 1])
-            i += 2
-        } else {
-            sb.append(text[i])
-            i++
-        }
-    }
-    return sb.toString()
-}
-
-private fun stripMarkdown(text: String): String {
-    var clean = text
-    clean = clean.replace(searchMdHeadingRegex, "")
-    clean = clean.replace(searchMdBlockquoteRegex, "")
-    clean = clean.replace(searchMdListItemRegex, "")
-    clean = clean.replace(searchMdEmphasisRegex, "")
-    clean = clean.replace(searchMdInlineCodeRegex, "")
-    clean = clean.replace(searchMdLinkRegex, "$1")
-    clean = clean.replace(searchMdImageRegex, "$1")
-    return stripBackslashEscapes(clean)
-}

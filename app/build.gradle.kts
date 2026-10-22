@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation("androidx.biometric:biometric:1.1.0")
     implementation("androidx.browser:browser:1.8.0")
+    implementation(libs.mikepenz.markdown.renderer)
+    implementation(libs.mikepenz.markdown.renderer.m3)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)

@@ -12,6 +12,7 @@ import com.example.echowithin.data.model.SearchResultsDto
 import com.example.echowithin.data.network.ApiClient
 import com.example.echowithin.data.network.SessionManager
 import com.example.echowithin.util.DateTimeUtils
+import com.example.echowithin.util.MarkdownText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
@@ -297,7 +298,7 @@ class NotesRepository(
             val pendingOp = "create"
             val note = AppNote(
                 id = tempId,
-                title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
+                title = MarkdownText.titleFrom(content),
                 content = content,
                 reference = reference,
                 tags = tags,
@@ -328,7 +329,7 @@ class NotesRepository(
             
             val note = AppNote(
                 id = noteId,
-                title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
+                title = MarkdownText.titleFrom(content),
                 content = content,
                 reference = reference,
                 tags = tags,
@@ -359,7 +360,7 @@ class NotesRepository(
                 val tempId = "local_" + java.util.UUID.randomUUID().toString()
                 val note = AppNote(
                     id = tempId,
-                    title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
+                    title = MarkdownText.titleFrom(content),
                     content = content,
                     reference = reference,
                     tags = tags,
@@ -377,7 +378,7 @@ class NotesRepository(
                 val createdAt = existing?.createdAt?.ifBlank { now } ?: now
                 val note = AppNote(
                     id = noteId,
-                    title = content.lineSequence().firstOrNull()?.trim()?.take(60) ?: "Untitled",
+                    title = MarkdownText.titleFrom(content),
                     content = content,
                     reference = reference,
                     tags = tags,
@@ -638,13 +639,10 @@ class NotesRepository(
                 if (response.content != null && !response.pending_approval) {
                     val local = dbHelper.getNoteById(noteId)
                     if (local != null) {
-                        val titleCandidate = response.content.lineSequence().firstOrNull()?.trim().orEmpty()
-                        val title = if (titleCandidate.isBlank()) "Untitled" else titleCandidate.take(60)
-                        
                         dbHelper.saveNote(
                             local.copy(
                                 content = response.content,
-                                title = title,
+                                title = MarkdownText.titleFrom(response.content),
                                 updateAvailable = false,
                                 isSynced = true
                             ),
@@ -682,8 +680,7 @@ class NotesRepository(
     }
 
     private fun NoteDto.toAppNote(isSynced: Boolean = true, pendingOp: String = "none"): AppNote {
-        val titleCandidate = content.lineSequence().firstOrNull()?.trim().orEmpty()
-        val title = if (titleCandidate.isBlank()) "Untitled" else titleCandidate.take(60)
+        val title = MarkdownText.titleFrom(content)
         val created = created_at ?: updated_at ?: ""
         val updated = updated_at ?: created_at ?: ""
         return AppNote(

@@ -1,10 +1,18 @@
 package com.example.echowithin.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+
+/**
+ * The app renders in a brand dark theme regardless of the system setting
+ * (Notesnook-inspired aesthetic). Any code that previously consulted
+ * `isSystemInDarkTheme()` to decide dark vs light styling (WebView CSS,
+ * note color tints) must use this instead, otherwise the note area renders
+ * "light" inside an always-dark scaffold on light-mode devices.
+ */
+const val AppIsDarkTheme = true
 
 private val EchoWithinColorScheme = darkColorScheme(
     primary = BrandGreen,
@@ -36,7 +44,7 @@ private val EchoWithinColorScheme = darkColorScheme(
 
 @Composable
 fun EchoWithinTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = AppIsDarkTheme,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
