@@ -8,6 +8,12 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -105,6 +111,7 @@ fun NoteDetailScreen(
     onSetReminder: ((String?) -> Unit)? = null,
     onSetColor: ((String) -> Unit)? = null,
     onUpdateContent: ((String) -> Unit)? = null,
+    onTapBody: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -746,12 +753,29 @@ fun NoteDetailScreen(
                         // parsed state is cached across recompositions so we never
                         // re-parse markdown during a bind/composition pass.
                         val markdownState = rememberMarkdownState(contentText)
+                        val textMeasurer = rememberTextMeasurer()
                         androidx.compose.foundation.text.selection.SelectionContainer {
                             Markdown(
                                 markdownState = markdownState,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 14.dp)
+                                    .pointerInput(contentText) {
+                                        detectTapGestures(
+                                            onTap = { offset ->
+                                                val layoutResult = textMeasurer.measure(
+                                                    text = contentText,
+                                                    style = TextStyle(
+                                                        fontSize = 18.sp,
+                                                        textAlign = TextAlign.Start
+                                                    ),
+                                                    constraints = Constraints(maxWidth = Constraints.Infinity)
+                                                )
+                                                val tapOffset = layoutResult.getOffsetForPosition(offset)
+                                                onTapBody?.invoke(tapOffset)
+                                            }
+                                        )
+                                    }
                             )
                         }
                     }

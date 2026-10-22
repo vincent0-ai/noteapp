@@ -18,8 +18,10 @@ object AppRoute {
     const val Share = "share/{noteId}"
     const val Versions = "versions/{noteId}"
 
-    fun editor(noteId: String?): String =
-        if (noteId.isNullOrBlank()) Editor else "editor?noteId=$noteId"
+    fun editor(noteId: String?, caretOffset: Int = -1): String {
+        val route = if (noteId.isNullOrBlank()) Editor else "editor?noteId=$noteId"
+        return if (caretOffset >= 0) "$route&caretOffset=$caretOffset" else route
+    }
 
     fun detail(noteId: String): String = "detail/$noteId"
     fun share(noteId: String): String = "share/$noteId"

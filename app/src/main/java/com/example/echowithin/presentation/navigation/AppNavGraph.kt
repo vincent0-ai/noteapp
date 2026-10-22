@@ -55,6 +55,12 @@ fun AppNavGraph(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    // Caret offset captured from a tap-to-edit gesture on the note body, so
+    // the editor can place the caret at the tapped character. Hoisted here so
+    // both Home (editor opens from list) and Detail (editor opens from viewer)
+    // can consume/produce it.
+    var caretOffset by remember { mutableIntStateOf(-1) }
+
     // Dynamic start destination based on whether user has an active session token
     val startDest = if (SessionManager.token != null && SessionManager.token != "null") AppRoute.Home else AppRoute.Welcome
 
@@ -430,11 +436,16 @@ fun AppNavGraph(
                     type = NavType.StringType
                     nullable = true
                     defaultValue = null
+                },
+                navArgument("caretOffset") {
+                    type = NavType.IntType
+                    defaultValue = -1
                 }
             )
         ) { backStackEntry ->
             val rawNoteId = backStackEntry.arguments?.getString("noteId")
             val noteId = if (rawNoteId == "null" || rawNoteId.isNullOrBlank()) null else rawNoteId
+            val caretOffset = backStackEntry.arguments?.getInt("caretOffset") ?: -1
             NoteEditorScreen(
                 noteId = noteId,
                 initialNote = noteId?.let(notesViewModel::getNoteById),
@@ -458,7 +469,8 @@ fun AppNavGraph(
                 isLocked = appLockViewModel.uiState.isLocked,
                 lockError = appLockViewModel.uiState.error,
                 lockLoading = appLockViewModel.uiState.isLoading,
-                onVerifyPin = { appLockViewModel.verify(it) }
+                onVerifyPin = { appLockViewModel.verify(it) },
+                initialCaretOffset = if (caretOffset >= 0) caretOffset else null
             )
         }
 
@@ -507,6 +519,12 @@ fun AppNavGraph(
                 },
                 onUpdateContent = { newContent ->
                     notesViewModel.updateNoteContentDirectly(noteId, newContent)
+                },
+                // Tap-to-edit: place caret at the tapped character offset when
+                // opening the editor.
+                onTapBody = { offset ->
+                    caretOffset = offset
+                    navController.navigate("editor?noteId=$noteId&caretOffset=$offset")
                 }
             )
         }

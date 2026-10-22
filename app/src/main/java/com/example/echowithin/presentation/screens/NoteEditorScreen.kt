@@ -21,6 +21,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -35,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.echowithin.data.model.AppNote
 import com.example.echowithin.presentation.components.EchoWithinTopBarTitle
+import com.example.echowithin.presentation.components.rememberMarkdownVisualTransformation
 import com.example.echowithin.ui.theme.ErrorRed
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.filled.FormatBold
@@ -120,7 +124,8 @@ fun NoteEditorScreen(
     lockError: String?,
     lockLoading: Boolean,
     onVerifyPin: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    initialCaretOffset: Int? = null
 ) {
     // Track the initial content to detect actual changes (not just "non-blank")
     val initialContent = remember { initialNote?.content.orEmpty() }
@@ -134,6 +139,25 @@ fun NoteEditorScreen(
     // Track canUndo/canRedo as state so toolbar recomposes
     var canUndo by remember { mutableStateOf(false) }
     var canRedo by remember { mutableStateOf(false) }
+
+    // Tap-to-edit caret placement: when the editor is opened with an
+    // initialCaretOffset, request focus, show the IME, and set the TextField
+    // selection at the tapped character position. Consumed once via key.
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(initialCaretOffset) {
+        if (initialCaretOffset != null && initialCaretOffset >= 0) {
+            focusRequester.requestFocus()
+            keyboardController?.show()
+            contentField = TextFieldValue(
+                contentField.text,
+                TextRange(
+                    initialCaretOffset.coerceAtLeast(0)
+                        .coerceAtMost(contentField.text.length)
+                )
+            )
+        }
+    }
 
     val content = contentField.text
     val hasChanges = content.isNotBlank()
@@ -402,6 +426,7 @@ fun NoteEditorScreen(
                 when (selectedTab) {
                     0 -> WriteTab(
                         contentField = contentField,
+                        focusRequester = focusRequester,
                         onContentChange = { newValue ->
                             if (newValue.text.length <= limit) {
                                 val processed = handleAutoNumbering(contentField, newValue)
@@ -448,6 +473,7 @@ fun NoteEditorScreen(
 @Composable
 private fun WriteTab(
     contentField: TextFieldValue,
+    focusRequester: FocusRequester? = null,
     onContentChange: (TextFieldValue) -> Unit,
     reference: String,
     onReferenceChange: (String) -> Unit,
@@ -480,12 +506,15 @@ private fun WriteTab(
                     .weight(1f)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
+                val markdownTransformation = rememberMarkdownVisualTransformation()
                 TextField(
                     value = contentField,
                     onValueChange = onContentChange,
+                    visualTransformation = markdownTransformation,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f),
+                        .weight(1f)
+                        .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
                     placeholder = { Text("Write your thoughts...") },
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,

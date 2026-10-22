@@ -2,9 +2,11 @@ package com.example.echowithin.presentation.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +25,7 @@ import com.example.echowithin.presentation.viewmodel.NotesViewModel
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Lock
+import com.example.echowithin.data.model.SearchHitDto
 import com.example.echowithin.ui.theme.BrandOrange
 import com.example.echowithin.ui.theme.BrandAmber
 import com.example.echowithin.util.MarkdownText
@@ -35,8 +38,18 @@ fun SearchScreen(
     onNoteClick: (String) -> Unit
 ) {
     var query by remember { mutableStateOf("") }
+    var selectedTag by remember { mutableStateOf<String?>(null) }
     val results = viewModel.uiState.searchResults
     val isLoading = viewModel.uiState.isLoading
+
+    val allTags = remember(viewModel.uiState.notes) {
+        viewModel.uiState.notes
+            .flatMap { it.tags }
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .sorted()
+    }
 
     Scaffold(
         topBar = {
@@ -81,7 +94,42 @@ fun SearchScreen(
                 )
             )
 
-            if (isLoading && results.isEmpty()) {
+            // Tag filter chips
+            if (allTags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = selectedTag == null,
+                        onClick = { selectedTag = null },
+                        label = { Text("All") },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = BrandOrange.copy(alpha = 0.2f),
+                            selectedLabelColor = BrandOrange
+                        )
+                    )
+                    allTags.forEach { tag ->
+                        val isSelected = selectedTag.equals(tag, ignoreCase = true)
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                selectedTag = if (isSelected) null else tag
+                            },
+                            label = { Text("#$tag") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = BrandOrange.copy(alpha = 0.2f),
+                                selectedLabelColor = BrandOrange
+                            )
+                        )
+                    }
+                }
+            }
+
+            if (isLoading && results.isEmpty() && query.isNotBlank()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -94,20 +142,38 @@ fun SearchScreen(
                 // Build a (hit, note) pair list so the locked-note filter
                 // only runs once per query result set, not once per
                 // recomposition per item.
-                //
-                // The server-side /personal_post/search endpoint already
-                // filters out locked notes (see blueprints/notes.py in the
-                // backend), and the offline fallback in NotesRepository
-                // filters them out locally too. The check below is a
-                // belt-and-braces defence — if anything ever slips through
-                // (older server, partial sync, etc.) we still won't leak
-                // locked note content into the search results list.
                 val notePairs = remember(results) {
                     results.map { hit -> hit to viewModel.getNoteById(hit.id) }
                 }
                 val visiblePairs = remember(notePairs) {
                     notePairs.filter { (_, note) -> note?.isLocked != true }
                 }
+
+                // Filter by tag if selected, or show notes matching tag when query is empty
+                val finalPairs = remember(visiblePairs, selectedTag, query, viewModel.uiState.notes, isLocked) {
+                    if (query.isBlank() && selectedTag != null) {
+                        viewModel.uiState.notes
+                            .filter { note ->
+                                !note.isTrashed &&
+                                (!note.isLocked || !isLocked) &&
+                                note.tags.any { it.equals(selectedTag, ignoreCase = true) }
+                            }
+                            .map { note ->
+                                SearchHitDto(
+                                    id = note.id,
+                                    snippet = MarkdownText.previewFrom(note.content, maxChars = 120),
+                                    created_at = note.createdAt.ifBlank { note.updatedAt }
+                                ) to (note as com.example.echowithin.data.model.AppNote?)
+                            }
+                    } else if (selectedTag != null) {
+                        visiblePairs.filter { (_, note) ->
+                            note?.tags?.any { it.equals(selectedTag, ignoreCase = true) } == true
+                        }
+                    } else {
+                        visiblePairs
+                    }
+                }
+
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
@@ -115,18 +181,12 @@ fun SearchScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 24.dp)
                 ) {
-                    // Stable key on the hit id so LazyColumn can preserve
-                    // item identity across result updates (typing a new
-                    // query, a locked note being hidden, etc.). Without a
-                    // key, every result-list mutation tears down and
-                    // recomposes every visible card and can jump scroll.
-                    items(visiblePairs, key = { (hit, _) -> hit.id }) { (hit, note) ->
+                    // Stable key on the hit id so LazyColumn can preserve item identity
+                    items(finalPairs, key = { (hit, _) -> hit.id }) { (hit, note) ->
                         val isNoteLocked = note?.isLocked == true
                         val hideContent = isNoteLocked && isLocked
 
-                        // Memoize the markdown-stripped + highlight-parsed
-                        // snippet per item so it's computed once per result,
-                        // not on every scroll frame / recomposition.
+                        // Memoize the markdown-stripped + highlight-parsed snippet
                         val highlightedSnippet = remember(hit.snippet) {
                             parseSearchSnippet(hit.snippet.orEmpty(), BrandOrange)
                         }
@@ -175,7 +235,28 @@ fun SearchScreen(
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                                
+
+                                if (note?.tags?.isNotEmpty() == true) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        note.tags.take(3).forEach { tag ->
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                                            ) {
+                                                Text(
+                                                    text = "#$tag",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -188,7 +269,7 @@ fun SearchScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                                         )
                                     }
-                                    
+
                                     Text(
                                         text = "View details →",
                                         style = MaterialTheme.typography.labelSmall,
@@ -200,15 +281,16 @@ fun SearchScreen(
                         }
                     }
 
-                    if (visiblePairs.isEmpty() && query.isNotEmpty() && !isLoading) {
+                    if (finalPairs.isEmpty() && (query.isNotEmpty() || selectedTag != null) && !isLoading) {
                         item {
-                            val lockedWereHidden = results.isNotEmpty()
+                            val message = when {
+                                query.isNotEmpty() && selectedTag != null -> "No notes found matching \"$query\" with tag #$selectedTag"
+                                query.isNotEmpty() -> "No results found for \"$query\""
+                                selectedTag != null -> "No notes found with tag #$selectedTag"
+                                else -> ""
+                            }
                             Text(
-                                text = if (lockedWereHidden) {
-                                    "Locked notes are hidden from search. Unlock them in the Locked tab to see them here."
-                                } else {
-                                    "No results found for \"$query\""
-                                },
+                                text = message,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(32.dp),
@@ -252,5 +334,3 @@ fun parseSearchSnippet(snippet: String, highlightColor: Color): AnnotatedString 
         }
     }
 }
-
-

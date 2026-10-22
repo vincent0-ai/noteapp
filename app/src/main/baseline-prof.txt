@@ -1,0 +1,38 @@
+# Baseline profile for EchoWithin: note list & viewer rendering critical paths
+# Optimized for AOT compilation on app install to minimize first-load jank and frame drops.
+
+# Note List Rendering (HomeScreen & NoteItem)
+Lcom/example/echowithin/presentation/screens/HomeScreenKt;
+HSPLcom/example/echowithin/presentation/screens/HomeScreenKt;->HomeScreen(Lcom/example/echowithin/presentation/viewmodel/NotesViewModel;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lcom/example/echowithin/presentation/viewmodel/AppLockViewModel;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+Lcom/example/echowithin/presentation/components/NoteItemKt;
+HSPLcom/example/echowithin/presentation/components/NoteItemKt;->NoteItem(Lcom/example/echowithin/data/model/AppNote;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;II)V
+
+# Note Detail & Markdown Viewer Rendering
+Lcom/example/echowithin/presentation/screens/NoteDetailScreenKt;
+HSPLcom/example/echowithin/presentation/screens/NoteDetailScreenKt;->NoteDetailScreen(Ljava/lang/String;Lcom/example/echowithin/data/model/AppNote;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function0;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;ZLjava/lang/String;ZLkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;Landroidx/compose/ui/Modifier;Landroidx/compose/runtime/Composer;III)V
+Lcom/mikepenz/markdown/m3/MarkdownKt;
+HSPLcom/mikepenz/markdown/m3/MarkdownKt;->Markdown(Lcom/mikepenz/markdown/model/MarkdownState;Landroidx/compose/ui/Modifier;Lcom/mikepenz/markdown/model/MarkdownColors;Lcom/mikepenz/markdown/model/MarkdownTypography;Lcom/mikepenz/markdown/model/MarkdownPadding;Lcom/mikepenz/markdown/annotator/Annotator;Landroidx/compose/runtime/Composer;II)V
+Lcom/mikepenz/markdown/model/MarkdownState;
+Lcom/mikepenz/markdown/model/MarkdownColors;
+Lcom/mikepenz/markdown/model/MarkdownTypography;
+Lcom/mikepenz/markdown/model/MarkdownPadding;
+
+# Note Editor & Live Styling
+Lcom/example/echowithin/presentation/screens/NoteEditorScreenKt;
+Lcom/example/echowithin/presentation/components/MarkdownVisualTransformation;
+HSPLcom/example/echowithin/presentation/components/MarkdownVisualTransformation;->filter(Landroidx/compose/ui/text/AnnotatedString;)Landroidx/compose/ui/text/input/TransformedText;
+
+# Utilities: Markdown & Diff
+Lcom/example/echowithin/util/MarkdownText;
+HSPLcom/example/echowithin/util/MarkdownText;->titleFrom(Ljava/lang/String;)Ljava/lang/String;
+HSPLcom/example/echowithin/util/MarkdownText;->previewFrom(Ljava/lang/String;I)Ljava/lang/String;
+HSPLcom/example/echowithin/util/MarkdownText;->plainText(Ljava/lang/String;)Ljava/lang/String;
+Lcom/example/echowithin/util/DiffUtils;
+HSPLcom/example/echowithin/util/DiffUtils;->computeDiff(Ljava/lang/String;Ljava/lang/String;)Lcom/example/echowithin/util/DiffResult;
+
+# Search & Version History Screens
+Lcom/example/echowithin/presentation/screens/SearchScreenKt;
+Lcom/example/echowithin/presentation/screens/NoteVersionsScreenKt;
+Lcom/example/echowithin/presentation/viewmodel/NotesViewModel;
+Lcom/example/echowithin/data/model/AppNote;
+Lcom/example/echowithin/data/model/VersionDto;
